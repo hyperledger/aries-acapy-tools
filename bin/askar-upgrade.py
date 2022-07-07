@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 
 # import pprint
 import sys
@@ -27,6 +28,10 @@ CHACHAPOLY_KEY_LEN = 32
 CHACHAPOLY_NONCE_LEN = 12
 CHACHAPOLY_TAG_LEN = 16
 ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_LEN
+
+
+class UpgradeError(Exception):
+    pass
 
 
 class DbConnection(ABC):
@@ -132,6 +137,9 @@ class SqliteConnection(DbConnection):
 
     async def pre_upgrade(self) -> dict:
         """Add new tables and columns."""
+
+        if not await self.find_table("metadata"):
+            raise UpgradeError("No metadata table found: not an Indy wallet database")
 
         if await self.find_table("config"):
             stmt = await self._conn.execute("SELECT name, value FROM config")
@@ -446,137 +454,191 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
 
 
 async def post_upgrade(uri: str, master_pw: str):
-    from aries_askar import Key, Session, Store
+    from aries_askar import Key, Store
 
     print("Opening wallet with Askar...")
     store = await Store.open(uri, pass_key=master_pw)
 
-    print("Updating keys...")
+    print("Updating keys...", end="")
+    upd_count = 0
     while True:
-        txn: Session = await store.transaction()
-        keys = await txn.fetch_all("Indy::Key", limit=50)
-        if not keys:
-            del txn
-            break
-        for row in keys:
-            await txn.remove("Indy::Key", row.name)
-            meta = await txn.fetch("Indy::KeyMetadata", row.name)
-            if meta:
-                await txn.remove("Indy::KeyMetadata", meta.name)
-                meta = json.loads(meta.value)["value"]
-            key_sk = base58.b58decode(json.loads(row.value)["signkey"])
-            key = Key.from_secret_bytes("ed25519", key_sk[:32])
-            await txn.insert_key(row.name, key, metadata=meta)
-        await txn.commit()
-
-    print("Updating master secret...")
-    async with store.transaction() as txn:
-        ms = await txn.fetch_all("Indy::MasterSecret")
-        if not ms:
-            del txn
-        elif len(ms) > 1:
-            raise Exception("Encountered multiple master secrets")
-        else:
-            row = ms[0]
-            await txn.remove("Indy::MasterSecret", row.name)
-            value = json.loads(row.value)["value"]
-            await txn.insert("master_secret", "default", value_json=value)
+        async with store.transaction() as txn:
+            keys = await txn.fetch_all("Indy::Key", limit=50)
+            if not keys:
+                break
+            for row in keys:
+                await txn.remove("Indy::Key", row.name)
+                meta = await txn.fetch("Indy::KeyMetadata", row.name)
+                if meta:
+                    await txn.remove("Indy::KeyMetadata", meta.name)
+                    meta = json.loads(meta.value)["value"]
+                key_sk = base58.b58decode(json.loads(row.value)["signkey"])
+                key = Key.from_secret_bytes("ed25519", key_sk[:32])
+                await txn.insert_key(row.name, key, metadata=meta)
+                upd_count += 1
             await txn.commit()
+    print(f" {upd_count} updated")
 
-    print("Updating DIDs...")
+    print("Updating master secret(s)...", end="")
+    upd_count = 0
     while True:
-        txn: Session = await store.transaction()
-        dids = await txn.fetch_all("Indy::Did", limit=50)
-        if not dids:
-            del txn
-            break
-        for row in dids:
-            await txn.remove("Indy::Did", row.name)
-            info = json.loads(row.value)
-            meta = await txn.fetch("Indy::DidMetadata", row.name)
-            if meta:
-                await txn.remove("Indy::DidMetadata", meta.name)
-                meta = json.loads(meta.value)["value"]
-                try:
-                    meta = json.loads(meta)
-                except json.JSONDecodeError:
-                    # leave as a string
-                    pass
-            await txn.insert(
-                "did",
-                row.name,
-                value_json={
-                    "did": info["did"],
-                    "verkey": info["verkey"],
-                    "metadata": meta,
-                },
-                tags={"verkey": info["verkey"]},
-            )
-        await txn.commit()
+        async with store.transaction() as txn:
+            ms = await txn.fetch_all("Indy::MasterSecret")
+            if not ms:
+                break
+            elif len(ms) > 1:
+                raise Exception("Encountered multiple master secrets")
+            else:
+                row = ms[0]
+                await txn.remove("Indy::MasterSecret", row.name)
+                value = json.loads(row.value)["value"]
+                # name as "default" ?
+                await txn.insert("master_secret", row.name, value_json=value)
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
 
-    print("Updating schemas...")
+    print("Updating DIDs...", end="")
+    upd_count = 0
     while True:
-        txn: Session = await store.transaction()
-        schemas = await txn.fetch_all("Indy::Schema", limit=50)
-        if not schemas:
-            del txn
-            break
-        for row in schemas:
-            await txn.remove("Indy::Schema", row.name)
-            await txn.insert(
-                "schema",
-                row.name,
-                value=row.value,
-            )
-        await txn.commit()
-
-    print("Updating credential definitions...")
-    while True:
-        txn: Session = await store.transaction()
-        cred_defs = await txn.fetch_all("Indy::CredentialDefinition", limit=50)
-        if not cred_defs:
-            del txn
-            break
-        for row in cred_defs:
-            await txn.remove("Indy::CredentialDefinition", row.name)
-            sid = await txn.fetch("Indy::SchemaId", row.name)
-            if not sid:
-                raise Exception(
-                    f"Schema ID not found for credential definition: {row.name}"
-                )
-            sid = sid.value.decode("utf-8")
-            await txn.insert(
-                "credential_def", row.name, value=row.value, tags={"schema_id": sid}
-            )
-
-            priv = await txn.fetch("Indy::CredentialDefinitionPrivateKey", row.name)
-            if priv:
-                await txn.remove("Indy::CredentialDefinitionPrivateKey", priv.name)
+        async with store.transaction() as txn:
+            dids = await txn.fetch_all("Indy::Did", limit=50)
+            if not dids:
+                break
+            for row in dids:
+                await txn.remove("Indy::Did", row.name)
+                info = json.loads(row.value)
+                meta = await txn.fetch("Indy::DidMetadata", row.name)
+                if meta:
+                    await txn.remove("Indy::DidMetadata", meta.name)
+                    meta = json.loads(meta.value)["value"]
+                    try:
+                        meta = json.loads(meta)
+                    except json.JSONDecodeError:
+                        # leave as a string
+                        pass
                 await txn.insert(
-                    "credential_def_private",
-                    priv.name,
-                    value=priv.value,
+                    "did",
+                    row.name,
+                    value_json={
+                        "did": info["did"],
+                        "verkey": info["verkey"],
+                        "metadata": meta,
+                    },
+                    tags={"verkey": info["verkey"]},
                 )
-            proof = await txn.fetch(
-                "Indy::CredentialDefinitionCorrectnessProof", row.name
-            )
-            if proof:
-                await txn.remove(
-                    "Indy::CredentialDefinitionCorrectnessProof", proof.name
-                )
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
+
+    print("Updating stored schemas...", end="")
+    upd_count = 0
+    while True:
+        async with store.transaction() as txn:
+            schemas = await txn.fetch_all("Indy::Schema", limit=50)
+            if not schemas:
+                break
+            for row in schemas:
+                await txn.remove("Indy::Schema", row.name)
                 await txn.insert(
-                    "credential_def_key_proof",
-                    proof.name,
-                    value=proof.value,
+                    "schema",
+                    row.name,
+                    value=row.value,
+                )
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
+
+    print("Updating stored credential definitions...", end="")
+    upd_count = 0
+    while True:
+        async with store.transaction() as txn:
+            cred_defs = await txn.fetch_all("Indy::CredentialDefinition", limit=50)
+            if not cred_defs:
+                break
+            for row in cred_defs:
+                await txn.remove("Indy::CredentialDefinition", row.name)
+                sid = await txn.fetch("Indy::SchemaId", row.name)
+                if not sid:
+                    raise Exception(
+                        f"Schema ID not found for credential definition: {row.name}"
+                    )
+                sid = sid.value.decode("utf-8")
+                await txn.insert(
+                    "credential_def", row.name, value=row.value, tags={"schema_id": sid}
                 )
 
-        await txn.commit()
+                priv = await txn.fetch("Indy::CredentialDefinitionPrivateKey", row.name)
+                if priv:
+                    await txn.remove("Indy::CredentialDefinitionPrivateKey", priv.name)
+                    await txn.insert(
+                        "credential_def_private",
+                        priv.name,
+                        value=priv.value,
+                    )
+                proof = await txn.fetch(
+                    "Indy::CredentialDefinitionCorrectnessProof", row.name
+                )
+                if proof:
+                    await txn.remove(
+                        "Indy::CredentialDefinitionCorrectnessProof", proof.name
+                    )
+                    await txn.insert(
+                        "credential_def_key_proof",
+                        proof.name,
+                        value=proof.value,
+                    )
+                upd_count += 1
 
-    # Indy::Credential
+            await txn.commit()
+    print(f" {upd_count} updated")
+
     # revocation registries
+
+    print("Updating stored credentials...", end="")
+    upd_count = 0
+    while True:
+        async with store.transaction() as txn:
+            creds = await txn.fetch_all("Indy::Credential", limit=50)
+            if not creds:
+                break
+            for row in creds:
+                await txn.remove("Indy::Credential", row.name)
+                cred_data = row.value_json
+                tags = _credential_tags(cred_data)
+                await txn.insert("credential", row.name, value=row.value, tags=tags)
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
 
     print("Closing wallet")
     await store.close()
+
+
+def _credential_tags(cred_data: dict) -> dict:
+    schema_id = cred_data["schema_id"]
+    schema_id_parts = re.match(r"^(\w+):2:([^:]+):([^:]+)$", schema_id)
+    if not schema_id_parts:
+        raise UpgradeError(f"Error parsing credential schema ID: {schema_id}")
+    cred_def_id = cred_data["cred_def_id"]
+    cdef_id_parts = re.match(r"^(\w+):3:CL:([^:]+):([^:]+)$", cred_def_id)
+    if not cdef_id_parts:
+        raise UpgradeError(f"Error parsing credential definition ID: {cred_def_id}")
+
+    tags = {
+        "schema_id": schema_id,
+        "schema_issuer_did": schema_id_parts[1],
+        "schema_name": schema_id_parts[2],
+        "schema_version": schema_id_parts[3],
+        "issuer_did": cdef_id_parts[1],
+        "cred_def_id": cred_def_id,
+        "rev_reg_id": cred_data.get("rev_reg_id", "None"),
+    }
+    for k, attr_value in cred_data["values"].items():
+        attr_name = k.replace(" ", "")
+        tags[f"attr::{attr_name}::value"] = attr_value["raw"]
+
+    return tags
 
 
 async def upgrade(db: DbConnection, master_pw: str):
@@ -598,6 +660,11 @@ async def upgrade(db: DbConnection, master_pw: str):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARN)
+
+    if len(sys.argv) < 2:
+        raise SystemExit("Missing database URL")
+    if len(sys.argv) < 3:
+        raise SystemExit("Missing database master password")
 
     conn = SqliteConnection(sys.argv[1])
     key = sys.argv[2]  # Faber.Agent372766
