@@ -593,7 +593,67 @@ async def post_upgrade(uri: str, master_pw: str):
             await txn.commit()
     print(f" {upd_count} updated")
 
-    # revocation registries
+    print("Updating stored revocation registry definitions...", end="")
+    upd_count = 0
+    while True:
+        async with store.transaction() as txn:
+            reg_defs = await txn.fetch_all(
+                "Indy::RevocationRegistryDefinition", limit=50
+            )
+            if not reg_defs:
+                break
+            for row in reg_defs:
+                await txn.remove("Indy::RevocationRegistryDefinition", row.name)
+                await txn.insert("revocation_reg_def", row.name, value=row.value)
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
+
+    print("Updating stored revocation registry keys...", end="")
+    upd_count = 0
+    while True:
+        async with store.transaction() as txn:
+            reg_defs = await txn.fetch_all(
+                "Indy::RevocationRegistryDefinitionPrivate", limit=50
+            )
+            if not reg_defs:
+                break
+            for row in reg_defs:
+                await txn.remove("Indy::RevocationRegistryDefinitionPrivate", row.name)
+                await txn.insert(
+                    "revocation_reg_def_private", row.name, value=row.value
+                )
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
+
+    print("Updating stored revocation registry states...", end="")
+    upd_count = 0
+    while True:
+        async with store.transaction() as txn:
+            reg_defs = await txn.fetch_all("Indy::RevocationRegistry", limit=50)
+            if not reg_defs:
+                break
+            for row in reg_defs:
+                await txn.remove("Indy::RevocationRegistry", row.name)
+                await txn.insert("revocation_reg", row.name, value=row.value)
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
+
+    print("Updating stored revocation registry info...", end="")
+    upd_count = 0
+    while True:
+        async with store.transaction() as txn:
+            reg_defs = await txn.fetch_all("Indy::RevocationRegistryInfo", limit=50)
+            if not reg_defs:
+                break
+            for row in reg_defs:
+                await txn.remove("Indy::RevocationRegistryInfo", row.name)
+                await txn.insert("revocation_reg_info", row.name, value=row.value)
+                upd_count += 1
+            await txn.commit()
+    print(f" {upd_count} updated")
 
     print("Updating stored credentials...", end="")
     upd_count = 0
