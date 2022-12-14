@@ -726,6 +726,15 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         raise SystemExit("Missing database master password")
 
-    conn = SqliteConnection(sys.argv[1])
+    if sys.argv[1][0:8] == "postgres":
+        print("DB type: pgsql")
+        r = urlparse(sys.argv[1])
+
+        conn = PgConnection(f"{r.hostname}:{r.port}", r.path[1:], r.username, r.password)
+    else:
+        print("DB type: sqlite")
+
+        conn = SqliteConnection(sys.argv[1])
+
     key = sys.argv[2]  # Faber.Agent372766
     asyncio.get_event_loop().run_until_complete(upgrade(conn, key))
