@@ -4,7 +4,7 @@ import os
 from setuptools import setup, find_packages
 
 PACKAGE_NAME = "aries_askar_upgrade"
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 
 with open(os.path.abspath("./README.md"), "r") as fh:
@@ -21,12 +21,12 @@ if __name__ == "__main__":
         packages=find_packages(),
         install_requires=[
             "aiosqlite~=0.17",
-            "aries_askar~=0.2",
-            "asyncpg~=0.22",
+            "aries_askar~=0.2.7",
+            "asyncpg~=0.27",
             "base58~=1.0",
             "cbor2~=5.2",
             "msgpack~=1.0",
-            "pynacl~=1.4",
+            "pynacl~=1.5",
         ],
         python_requires=">=3.6.3",
         classifiers=[
