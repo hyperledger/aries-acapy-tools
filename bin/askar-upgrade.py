@@ -9,7 +9,7 @@ import logging
 import os
 import re
 
-# import pprint
+import pprint
 import sys
 import uuid
 
@@ -384,6 +384,7 @@ def encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes) -
 def decrypt_merged(enc_value: bytes, key: bytes, b64: bool = False) -> bytes:
     if b64:
         enc_value = base64.b64decode(enc_value)
+
     nonce, ciphertext = (
         enc_value[:CHACHAPOLY_NONCE_LEN],
         enc_value[CHACHAPOLY_NONCE_LEN:],
@@ -447,8 +448,8 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
         upd = []
         for row in rows:
             result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
-            # pprint.pprint(result, indent=2)
-            # print()
+            pprint.pprint(result, indent=2)
+            print()
             upd.append(update_item(result, profile_key))
         await conn.update_items(upd)
 
