@@ -48,7 +48,7 @@ class DbConnection(ABC):
         """Check for existence of a table."""
 
     @abstractmethod
-    async def pre_upgrade(self, name: str) -> bool:
+    async def pre_upgrade(self) -> dict:
         """Add new tables and columns."""
 
     @abstractmethod
@@ -112,6 +112,27 @@ class PgConnection(DbConnection):
                 password=self._config["password"],
                 database=self._config["db"],
             )
+
+    async def find_table(self, name: str) -> bool:
+        """Check for existence of a table."""
+
+    async def pre_upgrade(self) -> dict:
+        """Add new tables and columns."""
+
+    async def insert_profile(self, name: str, key: bytes):
+        """Insert the initial profile."""
+
+    async def finish_upgrade(self):
+        """Complete the upgrade."""
+
+    async def fetch_one(self, sql: str, optional: bool = False):
+        """Fetch a single row from the database."""
+
+    async def fetch_pending_items(self, limit: int):
+        """Fetch un-updated items."""
+
+    async def update_items(self, items):
+        """Update items in the database."""
 
     async def close(self):
         """Release the connection."""
