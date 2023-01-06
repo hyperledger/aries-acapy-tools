@@ -34,5 +34,5 @@ if __name__ == "__main__":
             "License :: OSI Approved :: Apache Software License",
             "Operating System :: OS Independent",
         ],
-        scripts=["bin/askar-upgrade.py"],
+        scripts=["aries_askar_upgrade/askar-upgrade"],
     )
