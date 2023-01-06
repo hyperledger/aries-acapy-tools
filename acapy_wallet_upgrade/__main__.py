@@ -554,12 +554,12 @@ def _credential_tags(cred_data: dict) -> dict:
     return tags
 
 
-async def upgrade(db: DbConnection, master_pw: str):
-    await db.connect()
+async def upgrade(conn: DbConnection, master_pw: str):
+    await conn.connect()
 
     try:
-        await db.pre_upgrade()
-        indy_key = await fetch_indy_key(db, master_pw)
+        await conn.pre_upgrade()
+        indy_key = await fetch_indy_key(conn, master_pw)
         print(" ")
         print(f"fx upgrade(db: DbConnection, master_pw: {master_pw})")
         print("indy_key")
@@ -575,10 +575,10 @@ async def upgrade(db: DbConnection, master_pw: str):
         await conn.finish_upgrade()
         print("Finished schema upgrade")
     finally:
-        await db.close()
+        await conn.close()
 
     # TODO: Finish this...
-    await post_upgrade(f"sqlite://{db._path}", master_pw)
+    await post_upgrade(f"sqlite://{conn._path}", master_pw)
     print("done")
 
 
