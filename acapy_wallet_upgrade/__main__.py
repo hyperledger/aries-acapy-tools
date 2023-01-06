@@ -21,10 +21,10 @@ import msgpack
 import nacl.pwhash
 from urllib.parse import urlparse
 
-from aries_askar_upgrade.db_connection import DbConnection
-from aries_askar_upgrade.sqlite_connection import SqliteConnection
-from aries_askar_upgrade.pg_connection import PgConnection
-from aries_askar_upgrade.error import UpgradeError
+from .db_connection import DbConnection
+from .sqlite_connection import SqliteConnection
+from .pg_connection import PgConnection
+from .error import UpgradeError
 
 
 CHACHAPOLY_KEY_LEN = 32
@@ -582,7 +582,7 @@ async def upgrade(db: DbConnection, master_pw: str):
     print("done")
 
 
-if __name__ == "__main__":
+def main():
     logging.basicConfig(level=logging.WARN)
 
     if len(sys.argv) < 2:
@@ -602,3 +602,7 @@ if __name__ == "__main__":
 
     key = sys.argv[2]  # Faber.Agent372766
     asyncio.get_event_loop().run_until_complete(upgrade(conn, key))
+
+
+if __name__ == "__main__":
+    main()
