@@ -597,8 +597,4 @@ def main():
         conn = SqliteConnection(sys.argv[1])
 
     key = sys.argv[2]  # Faber.Agent372766
-    asyncio.get_event_loop().run_until_complete(upgrade(conn, key))
-
-
-if __name__ == "__main__":
-    main()
+    asyncio.run(upgrade(conn, key))
