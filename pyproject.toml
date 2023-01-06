@@ -33,6 +33,7 @@ flake8 = "<6.0.0"
 pytest = "<7.2.0"
 pytest-asyncio = "<0.20.3"
 docker-py = "^1.10.6"
+pre-commit = "<2.21.0"
 
 [tool.poetry.scripts]
 askar-upgrade = "acapy_wallet_upgrade.__main__:main"
