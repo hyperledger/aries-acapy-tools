@@ -11,6 +11,10 @@ class DbConnection(ABC):
         """Initialize the connection handler."""
 
     @abstractmethod
+    async def find_table(self, name: str) -> bool:
+        """Check for existence of a table."""
+
+    @abstractmethod
     async def pre_upgrade(self, name: str) -> bool:
         """Add new tables and columns."""
 
@@ -29,6 +33,10 @@ class DbConnection(ABC):
     @abstractmethod
     async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items."""
+
+    @abstractmethod
+    async def update_items(self, items):
+        """Update items in the database."""
 
     @abstractmethod
     async def close(self):
