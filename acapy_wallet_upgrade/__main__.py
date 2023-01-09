@@ -573,8 +573,7 @@ async def upgrade(conn: DbConnection, master_pw: str):
     finally:
         await conn.close()
 
-    # TODO: Finish this...
-    await post_upgrade(f"sqlite://{conn._path}", master_pw)
+    await post_upgrade(f"{conn._protocol}://{conn._path[0]}", master_pw)
     print("done")
 
 
@@ -590,7 +589,7 @@ def main():
         print("DB type: pgsql")
         r = urlparse(sys.argv[1])
 
-        conn = PgConnection(f"{r.hostname}:{r.port}", r.path[1:], r.username, r.password)
+        conn = PgConnection(f"{r.hostname}:{r.port}", r.path[1:], r.username, r.password, sys.argv[1])
     else:
         print("DB type: sqlite")
 

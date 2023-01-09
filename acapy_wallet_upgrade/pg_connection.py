@@ -15,7 +15,7 @@ class PgConnection(DbConnection):
     DB_TYPE = "pgsql"
 
     def __init__(
-            self, db_host: str, db_name: str, db_user: str, db_pass: str
+            self, db_host: str, db_name: str, db_user: str, db_pass: str, path: str,
     ) -> "PgConnection":
         """Initialize a PgConnection instance."""
         self._config = {
@@ -25,6 +25,8 @@ class PgConnection(DbConnection):
             "password": db_pass,
         }
         self._conn: asyncpg.Connection = None
+        self._path: str = path,
+        self._protocol: str = "postgres"
 
     @property
     def parsed_url(self):

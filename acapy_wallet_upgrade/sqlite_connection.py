@@ -13,6 +13,7 @@ class SqliteConnection(DbConnection):
         """Initialize a SqliteConnection instance."""
         self._path = path
         self._conn: aiosqlite.Connection = None
+        self._protocol: str = "sqlite"
 
     async def connect(self):
         """Accessor for the connection pool instance."""
