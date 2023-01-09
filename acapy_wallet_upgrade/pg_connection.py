@@ -78,16 +78,12 @@ class PgConnection(DbConnection):
                     SELECT name, value FROM config
                 ''')
             config = {}
-
             if len(stmt) > 0:
                 for row in stmt:
                     config[row[0]] = row[1]
-
-            # print(f"config: {config}")
-
             return config
-
-        if not await self.find_table("config"):
+        else:
+            await self.find_table("config")
             async with self._conn.transaction():
                 await self._conn.execute('''
                         CREATE TABLE config (
@@ -204,23 +200,23 @@ class PgConnection(DbConnection):
         print(" ")
         print(f"fx fetch_one(self, sql: {sql}, optional: {optional})")
 
-        stmt = await self._conn.fetch(sql)
+        stmt: str = await self._conn.fetch(sql)
         found = None
         if len(stmt) > 0:
             for row in stmt:
-                # print(f"row: {row}")
+                decoded = (base64.b64decode(bytes.decode(row[0])),)
                 if found is None:
-                    found = row
-                # else:
-                #     raise Exception("Found duplicate row")
+                    found = decoded
+                else:
+                    raise Exception("Found duplicate row")
 
-        if not optional and not found:
+        if optional or found:
+            print("found: ")
+            pprint.pprint(found, indent=2)
+            print(" ")
+            return found
+        else:
             raise Exception("Row not found")
-
-        print("found: ")
-        pprint.pprint(found, indent=2)
-        print(" ")
-        return found
 
     async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items."""

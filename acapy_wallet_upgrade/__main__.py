@@ -39,11 +39,7 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
     print(" ")
 
     metadata_row = await conn.fetch_one("SELECT value FROM metadata")
-    metadata_value = metadata_row[0]
-    if conn.DB_TYPE == "pgsql":
-        metadata_json = base64.b64decode(metadata_value)
-    else:
-        metadata_json = metadata_value
+    metadata_json = metadata_row[0]
     metadata = json.loads(metadata_json)
     keys_enc = bytes(metadata["keys"])
     salt = bytes(metadata["master_key_salt"])
