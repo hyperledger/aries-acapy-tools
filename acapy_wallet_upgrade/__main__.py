@@ -572,8 +572,7 @@ async def upgrade(conn: DbConnection, master_pw: str):
         print("Finished schema upgrade")
     finally:
         await conn.close()
-
-    await post_upgrade(f"{conn._protocol}://{conn._path[0]}", master_pw)
+    await post_upgrade(conn._path[0], master_pw)
     print("done")
 
 
