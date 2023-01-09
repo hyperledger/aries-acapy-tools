@@ -111,14 +111,13 @@ class PgConnection(DbConnection):
                 await self._conn.execute('''
                         ALTER TABLE items RENAME TO items_old;
                         CREATE TABLE items (
-                            id BIGINT NOT NULL,
+                            id SERIAL PRIMARY KEY,
                             profile_id INTEGER NOT NULL,
                             kind INTEGER NOT NULL,
                             category BYTEA NOT NULL,
                             name BYTEA NOT NULL,
                             value BYTEA NOT NULL,
                             expiry DATE NULL,
-                            PRIMARY KEY (id),
                             FOREIGN KEY (profile_id) REFERENCES profiles (id)
                                 ON DELETE CASCADE ON UPDATE CASCADE
                         );
@@ -254,13 +253,13 @@ class PgConnection(DbConnection):
         for item in items:
             del_ids = item["id"]
             async with self._conn.transaction():
-                ins = await self._conn.execute(
+                ins = await self._conn.fetch(
                     """
                         INSERT INTO items (profile_id, kind, category, name, value)
-                        VALUES (1, 2, $1, $2, $3)
+                        VALUES (1, 2, $1, $2, $3) RETURNING id
                     """,
                     item["category"], item["name"], item["value"])
-                item_id = ins.lastrowid
+                item_id = ins[0][0]
                 print(f"item_id: {item_id}")
                 if item["tags"]:
                     await self._conn.executemany(
