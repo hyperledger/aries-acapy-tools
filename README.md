@@ -1,19 +1,39 @@
 # Migration Script
 
+## Prerequisites
+
+* Upgrade PostgreSQL wallet database to >= PostgreSQL 11
+* Backup data (there are destructive actions in the migration script)
+
 ## Install
+
 ```
-python -m venv env
-source env/bin/activate
-pip install -e .
-askar-upgrade.py ...
+poetry install
+poetry shell
 ```
 
-## How to use
+## Run
 
-`sqlite:`
-> askar-upgrade <path-to-sqlite-db> '<database-master-password>'
+`SQLite:`
+```
+askar-upgrade <path-to-sqlite-db> '<database-master-password>'
+```
+
+`PostgreSQL:`
+```
+askar-upgrade postgres://<username>:<password>@<hostname>:<port>/<dbname> '<database-master-password>'
+```
+
+## Migration Strategy
+- Create Askar tables
+- Move current tables to temporary tables
+- Fill the Askar tables from the temporary tables
+- Remove the temporary tables
+
+## Roadmap
 
 
-`pgsql:`
-> cd acapy_wallet_upgrade
-> askar-upgrade postgres://<username>:<password>@<hostname>:<port>/<dbname> '<database-master-password>'
+- [x] Support SQLite
+- [x] Support PostgreSQL
+- [ ] Support different wallet management modes
+- [ ] Create automated testing
