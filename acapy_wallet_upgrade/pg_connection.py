@@ -99,7 +99,7 @@ class PgConnection(DbConnection):
             async with self._conn.transaction():
                 await self._conn.execute('''
                         CREATE TABLE profiles (
-                            id SERIAL NOT NULL,
+                            id BIGSERIAL,
                             name TEXT NOT NULL,
                             reference TEXT NULL,
                             profile_key BYTEA NULL,
@@ -113,13 +113,14 @@ class PgConnection(DbConnection):
                 await self._conn.execute('''
                         ALTER TABLE items RENAME TO items_old;
                         CREATE TABLE items (
-                            id SERIAL PRIMARY KEY,
-                            profile_id INTEGER NOT NULL,
-                            kind INTEGER NOT NULL,
+                            id BIGSERIAL,
+                            profile_id BIGINT NOT NULL,
+                            kind SMALLINT NOT NULL,
                             category BYTEA NOT NULL,
                             name BYTEA NOT NULL,
                             value BYTEA NOT NULL,
-                            expiry DATE NULL,
+                            expiry TIMESTAMP NULL,
+                            PRIMARY KEY(id),
                             FOREIGN KEY (profile_id) REFERENCES profiles (id)
                                 ON DELETE CASCADE ON UPDATE CASCADE
                         );
@@ -131,18 +132,18 @@ class PgConnection(DbConnection):
             async with self._conn.transaction():
                 await self._conn.execute('''
                         CREATE TABLE items_tags (
-                            id BIGINT NOT NULL,
+                            id BIGSERIAL,
                             item_id BIGINT NOT NULL,
                             name BYTEA NOT NULL,
                             value BYTEA NOT NULL,
-                            plaintext BOOLEAN NOT NULL,
+                            plaintext SMALLINT NOT NULL,
                             PRIMARY KEY (id),
                             FOREIGN KEY (item_id) REFERENCES items (id)
                                 ON DELETE CASCADE ON UPDATE CASCADE
                         );
-                        CREATE INDEX ix_items_tags_item_id ON items_tags (item_id);
-                        CREATE INDEX ix_items_tags_name_enc ON items_tags (name, SUBSTR(value, 1, 12)) WHERE plaintext=FALSE;
-                        CREATE INDEX ix_items_tags_name_plain ON items_tags (name, value) WHERE plaintext=TRUE;
+                        CREATE INDEX ix_items_tags_item_id ON items_tags(item_id);
+                        CREATE INDEX ix_items_tags_name_enc ON items_tags(name, SUBSTR(value, 1, 12)) WHERE plaintext=0;
+                        CREATE INDEX ix_items_tags_name_plain ON items_tags(name, value) WHERE plaintext=1;
                     ''')
 
         return {}
