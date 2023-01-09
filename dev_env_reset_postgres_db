@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# on Windows, docker run needs to be prefixed by winpty
+if [ "$OSTYPE" == "msys" ]; then
+	DOCKER="winpty docker"
+else
+	DOCKER=${DOCKER:-docker}
+fi
+
+# stop postgress container
+$DOCKER stop indy-demo-postgres &> /dev/null \
+	&& echo "Stopped previous postgres container" || true
+
+# check for db.tar
+if test -f "db.tar"; then
+	echo "removing old db ..."
+	# remove old db volume
+	rm -rfI $(pwd)/db
+	# create new db volume
+	echo "Extracting db ..."
+	mkdir db
+	tar -xf db.tar -C ./db
+fi
+# start postgress container
+
+$DOCKER run --rm -d --name indy-demo-postgres \
+	-p 5432:5432 \
+	-v $(pwd)/db:/var/lib/postgresql/data \
+	-e POSTGRES_PASSWORD=mysecretpassword \
+	postgres:11 && echo "Started postgres container"
