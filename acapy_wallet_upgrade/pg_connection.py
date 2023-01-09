@@ -185,14 +185,14 @@ class PgConnection(DbConnection):
         print("fx finish_upgrade(self)")
         print(" ")
 
-        await self._conn.executescript(
+        await self._conn.execute(
             """
             BEGIN TRANSACTION;
-            DROP TABLE items_old;
+            DROP TABLE items_old CASCADE;
             DROP TABLE metadata;
             DROP TABLE tags_encrypted;
             DROP TABLE tags_plaintext;
-            INSERT INTO config (name, value) VALUES ("version", "1");
+            INSERT INTO config (name, value) VALUES ('version', 1);
             COMMIT;
         """
         )
@@ -235,7 +235,6 @@ class PgConnection(DbConnection):
             ''', limit)
 
         print("stmt: ")
-        pprint.pprint(stmt[0], indent=2)
         print(" ")
         # return await stmt.fetchall()
         return stmt
