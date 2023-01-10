@@ -258,8 +258,6 @@ def update_item(item: dict, key: dict) -> dict:
 
     print(f"found type: {item['type']}")
     print(f"found key: {key}")
-    # print(f"found ick: {key['ick']}")
-    # print(f"found ihk: {key['ihk']}")
 
     ret_val = {
         "id": item["id"],
@@ -293,9 +291,6 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
         for row in rows:
             result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
             pprint.pprint(result, indent=2)
-            # print(f"found: {result}")
-            # print(f"indy_key: {indy_key}")
-            # print(" ")
             upd.append(update_item(result, profile_key))
         await conn.update_items(upd)
 
@@ -339,7 +334,6 @@ async def post_upgrade(uri: str, master_pw: str):
                 row = ms[0]
                 await txn.remove("Indy::MasterSecret", row.name)
                 value = json.loads(row.value)["value"]
-                # name as "default" ?
                 await txn.insert("master_secret", row.name, value_json=value)
                 upd_count += 1
             await txn.commit()

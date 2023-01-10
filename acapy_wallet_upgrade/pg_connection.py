@@ -159,17 +159,6 @@ class PgConnection(DbConnection):
         print("key: ")
         pprint.pprint(key, indent=2)
         print(" ")
-        # await self._conn.executemany(
-        #     "INSERT INTO config (name, value) VALUES (?1, ?2)",
-        #     (
-        #         ("default_profile", name),
-        #         ("key", pass_key),
-        #     ),
-        # )
-        # await self._conn.execute(
-        #     "INSERT INTO profiles (name, profile_key) VALUES (?1, ?2)", (name, key)
-        # )
-        # await self._conn.commit()
         async with self._conn.transaction():
             await self._conn.executemany('''
                     INSERT INTO config (name, value) VALUES($1, $2)
@@ -236,7 +225,6 @@ class PgConnection(DbConnection):
 
         print("stmt: ")
         print(" ")
-        # return await stmt.fetchall()
         return stmt
 
     async def close(self):
@@ -271,22 +259,3 @@ class PgConnection(DbConnection):
                         """,
                         ((item_id, *tag) for tag in item["tags"]))
                 await self._conn.execute("DELETE FROM items_old WHERE id IN ($1)", del_ids)
-
-            # ins = await self._conn.execute(
-            #     """
-            #     INSERT INTO items (profile_id, kind, category, name, value)
-            #     VALUES (1, 2, $1, $2, $3)
-            #     """,
-            #     item["category"], item["name"], item["value"],
-            # )
-            # item_id = ins.lastrowid
-            # if item["tags"]:
-            #     await self._conn.executemany(
-            #         """
-            #         INSERT INTO items_tags (item_id, plaintext, name, value)
-            #         VALUES ($1, $2, $3, $4)
-            #         """,
-            #         ((item_id, *tag) for tag in item["tags"]),
-            #     )
-        # await self._conn.execute("DELETE FROM items_old WHERE id IN ($1)", (del_ids,))
-        # await self._conn.commit()
