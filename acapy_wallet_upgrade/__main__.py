@@ -180,6 +180,7 @@ def decrypt_merged(enc_value: bytes, key: bytes, b64: bool = False) -> bytes:
 
     if b64:
         enc_value = base64.b64decode(enc_value)
+
     nonce, ciphertext = (
         enc_value[:CHACHAPOLY_NONCE_LEN],
         enc_value[CHACHAPOLY_NONCE_LEN:],
