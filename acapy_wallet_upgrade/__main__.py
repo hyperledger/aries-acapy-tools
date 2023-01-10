@@ -572,7 +572,10 @@ async def upgrade(conn: DbConnection, master_pw: str):
         print("Finished schema upgrade")
     finally:
         await conn.close()
-    await post_upgrade(conn._path[0], master_pw)
+    if conn._protocol == "sqlite":
+        await post_upgrade(f"sqlite://{conn._path}", master_pw)
+    elif conn._protocol == "postgres":
+        await post_upgrade(conn._path[0], master_pw)
     print("done")
 
 
