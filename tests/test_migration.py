@@ -1,6 +1,7 @@
-import pytest
 import shutil
-import sys
+from pathlib import Path
+
+import pytest
 
 from acapy_wallet_upgrade.__main__ import upgrade
 from acapy_wallet_upgrade.sqlite_connection import SqliteConnection
@@ -16,14 +17,14 @@ async def test_migration_sqlite(tmp_path):
     key = "insecure"
 
     # Alice
-    src_alice = f"{sys.path[0]}/tests/input/alice.db"
+    src_alice = Path("input/alice.db")
     dst_alice = d / "alice.db"
     shutil.copyfile(src_alice, dst_alice)
     conn_alice = SqliteConnection(dst_alice)
     await upgrade(conn_alice, key)
 
     # Bob
-    src_bob = f"{sys.path[0]}/tests/input/bob.db"
+    src_bob = Path("input/bob.db")
     dst_bob = d / "bob.db"
     shutil.copyfile(src_bob, dst_bob)
     conn_bob = SqliteConnection(dst_bob)
