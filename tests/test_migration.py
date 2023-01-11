@@ -42,7 +42,7 @@ def test_migration_dbpw(tmp_path):
 
     src = Path("input/dbpw")
     dst = d / "dbpw"
-    shutil.copyfile(src, dst)
+    shutil.copytree(src, dst)
 
     client = docker.from_env()
 
