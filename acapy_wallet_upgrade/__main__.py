@@ -15,15 +15,16 @@ import pprint
 import sys
 import uuid
 
-from abc import ABC, abstractmethod
-from urllib.parse import urlparse
-
-import aiosqlite
-import asyncpg
 import base58
 import cbor2
 import msgpack
 import nacl.pwhash
+from urllib.parse import urlparse
+
+from .db_connection import DbConnection
+from .sqlite_connection import SqliteConnection
+from .pg_connection import PgConnection
+from .error import UpgradeError
 
 
 CHACHAPOLY_KEY_LEN = 32
@@ -32,304 +33,13 @@ CHACHAPOLY_TAG_LEN = 16
 ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_LEN
 
 
-class UpgradeError(Exception):
-    pass
-
-
-class DbConnection(ABC):
-    """Abstract database connection."""
-
-    DB_TYPE: str
-
-    @abstractmethod
-    async def connect(self):
-        """Initialize the connection handler."""
-
-    @abstractmethod
-    async def find_table(self, name: str) -> bool:
-        """Check for existence of a table."""
-
-    @abstractmethod
-    async def pre_upgrade(self) -> dict:
-        """Add new tables and columns."""
-
-    @abstractmethod
-    async def insert_profile(self, name: str, key: bytes):
-        """Insert the initial profile."""
-
-    @abstractmethod
-    async def finish_upgrade(self):
-        """Complete the upgrade."""
-
-    @abstractmethod
-    async def fetch_one(self, sql: str, optional: bool = False):
-        """Fetch a single row from the database."""
-
-    @abstractmethod
-    async def fetch_pending_items(self, limit: int):
-        """Fetch un-updated items."""
-
-    @abstractmethod
-    async def update_items(self, items):
-        """Update items in the database."""
-
-    @abstractmethod
-    async def close(self):
-        """Release the connection."""
-
-
-class PgConnection(DbConnection):
-    """Postgres connection."""
-
-    DB_TYPE = "pgsql"
-
-    def __init__(
-        self, db_host: str, db_name: str, db_user: str, db_pass: str
-    ) -> "PgConnection":
-        """Initialize a PgConnection instance."""
-        self._config = {
-            "host": db_host,
-            "db": db_name,
-            "user": db_user,
-            "password": db_pass,
-        }
-        self._conn: asyncpg.Connection = None
-
-    @property
-    def parsed_url(self):
-        """Accessor for the parsed database URL."""
-        url = self._config["host"]
-        if "://" not in url:
-            url = f"http://{url}"
-        return urlparse(url)
-
-    async def connect(self):
-        """Accessor for the connection pool instance."""
-        if not self._conn:
-            parts = self.parsed_url
-            self._conn = await asyncpg.connect(
-                host=parts.hostname,
-                port=parts.port or 5432,
-                user=self._config["user"],
-                password=self._config["password"],
-                database=self._config["db"],
-            )
-
-    async def find_table(self, name: str) -> bool:
-        """Check for existence of a table."""
-
-    async def pre_upgrade(self) -> dict:
-        """Add new tables and columns."""
-
-    async def insert_profile(self, name: str, key: bytes):
-        """Insert the initial profile."""
-
-    async def finish_upgrade(self):
-        """Complete the upgrade."""
-
-    async def fetch_one(self, sql: str, optional: bool = False):
-        """Fetch a single row from the database."""
-
-    async def fetch_pending_items(self, limit: int):
-        """Fetch un-updated items."""
-
-    async def update_items(self, items):
-        """Update items in the database."""
-
-    async def close(self):
-        """Release the connection."""
-        if self._conn:
-            await self._conn.close()
-            self._conn = None
-
-
-class SqliteConnection(DbConnection):
-    """Sqlite connection."""
-
-    DB_TYPE = "sqlite"
-
-    def __init__(self, path: str) -> "SqliteConnection":
-        """Initialize a SqliteConnection instance."""
-        self._path = path
-        self._conn: aiosqlite.Connection = None
-
-    async def connect(self):
-        """Accessor for the connection pool instance."""
-        if not self._conn:
-            self._conn = await aiosqlite.connect(self._path)
-
-    async def find_table(self, name: str) -> bool:
-        """Check for existence of a table."""
-        found = await self._conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
-            (name,),
-        )
-        return (await found.fetchone())[0]
-
-    async def pre_upgrade(self) -> dict:
-        """Add new tables and columns."""
-
-        if not await self.find_table("metadata"):
-            raise UpgradeError("No metadata table found: not an Indy wallet database")
-
-        if await self.find_table("config"):
-            stmt = await self._conn.execute("SELECT name, value FROM config")
-            config = {}
-            async for row in stmt:
-                config[row[0]] = row[1]
-            return config
-
-        await self._conn.executescript(
-            """
-            BEGIN EXCLUSIVE TRANSACTION;
-
-            CREATE TABLE config (
-                name TEXT NOT NULL,
-                value TEXT,
-                PRIMARY KEY (name)
-            );
-
-            CREATE TABLE profiles (
-                id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                reference TEXT NULL,
-                profile_key BLOB NULL,
-                PRIMARY KEY (id)
-            );
-            CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
-
-            ALTER TABLE items RENAME TO items_old;
-            CREATE TABLE items (
-                id INTEGER NOT NULL,
-                profile_id INTEGER NOT NULL,
-                kind INTEGER NOT NULL,
-                category BLOB NOT NULL,
-                name BLOB NOT NULL,
-                value BLOB NOT NULL,
-                expiry DATETIME NULL,
-                PRIMARY KEY (id),
-                FOREIGN KEY (profile_id) REFERENCES profiles (id)
-                    ON DELETE CASCADE ON UPDATE CASCADE
-            );
-            CREATE UNIQUE INDEX ix_items_uniq ON items
-                (profile_id, kind, category, name);
-
-            CREATE TABLE items_tags (
-                id INTEGER NOT NULL,
-                item_id INTEGER NOT NULL,
-                name BLOB NOT NULL,
-                value BLOB NOT NULL,
-                plaintext BOOLEAN NOT NULL,
-                PRIMARY KEY (id),
-                FOREIGN KEY (item_id) REFERENCES items (id)
-                    ON DELETE CASCADE ON UPDATE CASCADE
-            );
-            CREATE INDEX ix_items_tags_item_id ON items_tags (item_id);
-            CREATE INDEX ix_items_tags_name_enc ON items_tags
-                (name, SUBSTR(value, 1, 12)) WHERE plaintext=0;
-            CREATE INDEX ix_items_tags_name_plain ON items_tags
-                (name, value) WHERE plaintext=1;
-
-            COMMIT;
-        """,
-        )
-        return {}
-
-    async def insert_profile(self, pass_key: str, name: str, key: bytes):
-        """Insert the initial profile."""
-        await self._conn.executemany(
-            "INSERT INTO config (name, value) VALUES (?1, ?2)",
-            (
-                ("default_profile", name),
-                ("key", pass_key),
-            ),
-        )
-        await self._conn.execute(
-            "INSERT INTO profiles (name, profile_key) VALUES (?1, ?2)", (name, key)
-        )
-        await self._conn.commit()
-
-    async def finish_upgrade(self):
-        """Complete the upgrade."""
-        await self._conn.executescript(
-            """
-            BEGIN EXCLUSIVE TRANSACTION;
-            DROP TABLE items_old;
-            DROP TABLE metadata;
-            DROP TABLE tags_encrypted;
-            DROP TABLE tags_plaintext;
-            INSERT INTO config (name, value) VALUES ("version", "1");
-            COMMIT;
-        """
-        )
-
-    async def fetch_one(self, sql: str, optional: bool = False):
-        """Fetch a single row from the database."""
-        stmt = await self._conn.execute(sql)
-        found = None
-        async for row in stmt:
-            if found is None:
-                found = row
-            else:
-                raise Exception("Found duplicate row")
-        if optional or found:
-            return found
-        else:
-            raise Exception("Row not found")
-
-    async def fetch_pending_items(self, limit: int):
-        """Fetch un-updated items."""
-        stmt = await self._conn.execute(
-            """
-            SELECT i.id, i.type, i.name, i.value, i.key,
-            (SELECT GROUP_CONCAT(HEX(te.name) || ':' || HEX(te.value))
-                FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
-            (SELECT GROUP_CONCAT(HEX(tp.name) || ':' || HEX(tp.value))
-                FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
-            FROM items_old i LIMIT ?1
-            """,
-            (limit,),
-        )
-        return await stmt.fetchall()
-
-    async def update_items(self, items):
-        """Update items in the database."""
-        del_ids = []
-        for item in items:
-            del_ids = item["id"]
-            ins = await self._conn.execute(
-                """
-                INSERT INTO items (profile_id, kind, category, name, value)
-                VALUES (1, 2, ?1, ?2, ?3)
-                """,
-                (item["category"], item["name"], item["value"]),
-            )
-            item_id = ins.lastrowid
-            if item["tags"]:
-                await self._conn.executemany(
-                    """
-                    INSERT INTO items_tags (item_id, plaintext, name, value)
-                    VALUES (?1, ?2, ?3, ?4)
-                    """,
-                    ((item_id, *tag) for tag in item["tags"]),
-                )
-        await self._conn.execute("DELETE FROM items_old WHERE id IN (?1)", (del_ids,))
-        await self._conn.commit()
-
-    async def close(self):
-        """Release the connection."""
-        if self._conn:
-            await self._conn.close()
-            self._conn = None
-
-
 async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
+    print(" ")
+    print(f"fx fetch_indy_key(conn: DbConnection, key_pass: {key_pass})")
+    print(" ")
+
     metadata_row = await conn.fetch_one("SELECT value FROM metadata")
-    metadata_value = metadata_row[0]
-    if conn.DB_TYPE == "pgsql":
-        metadata_json = base64.b64decode(metadata_value)
-    else:
-        metadata_json = metadata_value
+    metadata_json = metadata_row[0]
     metadata = json.loads(metadata_json)
     keys_enc = bytes(metadata["keys"])
     salt = bytes(metadata["master_key_salt"])
@@ -368,11 +78,26 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
 
 
 async def init_profile(conn: DbConnection, indy_key: dict) -> dict:
+    print(" ")
+    print("fx init_profile(conn: DbConnection, indy_key: dict)")
+    print("indy_key: ")
+    pprint.pprint(indy_key, indent=2)
+
     profile_row = await conn.fetch_one(
         "SELECT id, profile_key FROM profiles", optional=True
     )
+    print("profile_row: ")
+    pprint.pprint(profile_row, indent=2)
+
     if profile_row:
+        print("before profile_key: ")
+        pprint.pprint(profile_row[1], indent=2)
+
         profile_key = cbor2.loads(profile_row[1])
+        print("after profile_key: ")
+        pprint.pprint(profile_key, indent=2)
+        print(" ")
+
     else:
         profile_key = {
             "ver": "1",
@@ -383,27 +108,58 @@ async def init_profile(conn: DbConnection, indy_key: dict) -> dict:
             "tvk": indy_key["tag_value"],
             "thk": indy_key["tag_hmac"],
         }
+
+        print("profile_key: ")
+        pprint.pprint(profile_key, indent=2)
+
         pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
+        print("pass_key: ")
+        pprint.pprint(pass_key, indent=2)
+
         enc_pk = encrypt_merged(cbor2.dumps(profile_key), indy_key["master"])
+        print("enc_pk: ")
+        pprint.pprint(enc_pk, indent=2)
+        print(" ")
+
         await conn.insert_profile(pass_key, str(uuid.uuid4()), enc_pk)
+
     return profile_key
 
 
-def encrypt_merged(message: bytes, key: bytes, hmac_key: bytes = None) -> bytes:
+def encrypt_merged(message: bytes, my_key: bytes, hmac_key: bytes = None) -> bytes:
+    print(" ")
+    print("fx encrypt_merged(message: bytes, my_key: bytes, hmac_key: bytes = None)")
+    print("message: ")
+    pprint.pprint(message, indent=2)
+    print("my_key: ")
+    pprint.pprint(my_key, indent=2)
+    print("hmac_key: ")
+    pprint.pprint(hmac_key, indent=2)
+    print(" ")
+
     if hmac_key:
-        nonce = hmac.HMAC(hmac_key, message, digestmod=hashlib.sha256).digest()[
-            :CHACHAPOLY_NONCE_LEN
-        ]
+        nonce = hmac.HMAC(hmac_key, message, digestmod=hashlib.sha256).digest()[:CHACHAPOLY_NONCE_LEN]
     else:
         nonce = os.urandom(CHACHAPOLY_NONCE_LEN)
 
-    ciphertext = nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt(
-        message, None, nonce, key
-    )
+    ciphertext = nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt(message, None, nonce, my_key)
+
     return nonce + ciphertext
 
 
 def encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes) -> bytes:
+    print(" ")
+    print("fx encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes)")
+    print("category: ")
+    pprint.pprint(category, indent=2)
+    print("name: ")
+    pprint.pprint(name, indent=2)
+    print("value: ")
+    pprint.pprint(value, indent=2)
+    print("hmac_key: ")
+    pprint.pprint(hmac_key, indent=2)
+    print(" ")
+
     hasher = hmac.HMAC(hmac_key, digestmod=hashlib.sha256)
     hasher.update(len(category).to_bytes(4, "big"))
     hasher.update(category)
@@ -414,6 +170,14 @@ def encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes) -
 
 
 def decrypt_merged(enc_value: bytes, key: bytes, b64: bool = False) -> bytes:
+    print(" ")
+    print(f"fx decrypt_merged(enc_value: bytes, key: bytes, b64: {b64})")
+    print("enc_value: ")
+    pprint.pprint(enc_value, indent=2)
+    print("key: ")
+    pprint.pprint(key, indent=2)
+    print(" ")
+
     if b64:
         enc_value = base64.b64decode(enc_value)
 
@@ -427,6 +191,16 @@ def decrypt_merged(enc_value: bytes, key: bytes, b64: bool = False) -> bytes:
 
 
 def decrypt_tags(tags: str, name_key: bytes, value_key: bytes = None):
+    print(" ")
+    print(f"fx decrypt_tags(tags: str, name_key: bytes, value_key: bytes = {bytes})")
+    print("tags: ")
+    pprint.pprint(tags, indent=2)
+    print("name_key: ")
+    pprint.pprint(name_key, indent=2)
+    print("value_key: ")
+    pprint.pprint(value_key, indent=2)
+    print(" ")
+
     for tag in tags.split(","):
         tag_name, tag_value = map(bytes.fromhex, tag.split(":"))
         name = decrypt_merged(tag_name, name_key)
@@ -435,6 +209,13 @@ def decrypt_tags(tags: str, name_key: bytes, value_key: bytes = None):
 
 
 def decrypt_item(row: tuple, keys: dict, b64: bool = False):
+    print(" ")
+    print(f"fx decrypt_item(row: tuple, keys: dict, b64: bool = {b64})")
+    print("row: ")
+    pprint.pprint(row, indent=2)
+    pprint.pprint(f"keys: {keys}", indent=2)
+    print(" ")
+
     row_id, row_type, row_name, row_value, row_key, tags_enc, tags_plain = row
     value_key = decrypt_merged(row_key, keys["value"])
     value = decrypt_merged(row_value, value_key) if row_value else None
@@ -460,13 +241,25 @@ def decrypt_item(row: tuple, keys: dict, b64: bool = False):
 
 
 def update_item(item: dict, key: dict) -> dict:
+    print(" ")
+    print("fx update_item(item: dict, key: dict)")
+    print("item: ")
+    pprint.pprint(item, indent=2)
+    print("key: ")
+    pprint.pprint(key, indent=2)
+    print(" ")
+
     tags = []
     for plain, k, v in item["tags"]:
         if not plain:
             v = encrypt_merged(v, key["tvk"], key["thk"])
         k = encrypt_merged(k, key["tnk"], key["thk"])
         tags.append((plain, k, v))
-    return {
+
+    print(f"found type: {item['type']}")
+    print(f"found key: {key}")
+
+    ret_val = {
         "id": item["id"],
         "category": encrypt_merged(item["type"], key["ick"], key["ihk"]),
         "name": encrypt_merged(item["name"], key["ink"], key["ihk"]),
@@ -474,8 +267,21 @@ def update_item(item: dict, key: dict) -> dict:
         "tags": tags,
     }
 
+    print("ret_val: ")
+    pprint.pprint(ret_val, indent=2)
+
+    return ret_val
+
 
 async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
+    print(" ")
+    print("fx update_items(conn: DbConnection, indy_key: dict, profile_key: dict)")
+    print("indy_key: ")
+    pprint.pprint(indy_key, indent=2)
+    print("profile_key: ")
+    pprint.pprint(profile_key, indent=2)
+    print(" ")
+
     while True:
         rows = await conn.fetch_pending_items(1)
         if not rows:
@@ -485,7 +291,6 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
         for row in rows:
             result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
             pprint.pprint(result, indent=2)
-            print()
             upd.append(update_item(result, profile_key))
         await conn.update_items(upd)
 
@@ -529,7 +334,6 @@ async def post_upgrade(uri: str, master_pw: str):
                 row = ms[0]
                 await txn.remove("Indy::MasterSecret", row.name)
                 value = json.loads(row.value)["value"]
-                # name as "default" ?
                 await txn.insert("master_secret", row.name, value_json=value)
                 upd_count += 1
             await txn.commit()
@@ -710,6 +514,12 @@ async def post_upgrade(uri: str, master_pw: str):
 
 
 def _credential_tags(cred_data: dict) -> dict:
+    print(" ")
+    print("fx _credential_tags(cred_data: dict)")
+    print("cred_data: ")
+    pprint.pprint(cred_data, indent=2)
+    print(" ")
+
     schema_id = cred_data["schema_id"]
     schema_id_parts = re.match(r"^(\w+):2:([^:]+):([^:]+)$", schema_id)
     if not schema_id_parts:
@@ -735,24 +545,36 @@ def _credential_tags(cred_data: dict) -> dict:
     return tags
 
 
-async def upgrade(db: DbConnection, master_pw: str):
-    await db.connect()
+async def upgrade(conn: DbConnection, master_pw: str):
+    await conn.connect()
 
     try:
-        await db.pre_upgrade()
-        indy_key = await fetch_indy_key(db, master_pw)
+        await conn.pre_upgrade()
+        indy_key = await fetch_indy_key(conn, master_pw)
+        print(" ")
+        print(f"fx upgrade(db: DbConnection, master_pw: {master_pw})")
+        print("indy_key")
+        pprint.pprint(indy_key, indent=2)
+        print(" ")
         profile_key = await init_profile(conn, indy_key)
+        print(" ")
+        print("fx upgrade(db, master_pw)")
+        print("profile_key: ")
+        print(" ")
+        pprint.pprint(profile_key, indent=2)
         await update_items(conn, indy_key, profile_key)
         await conn.finish_upgrade()
         print("Finished schema upgrade")
     finally:
-        await db.close()
-
-    await post_upgrade(f"sqlite://{db._path}", master_pw)
+        await conn.close()
+    if conn._protocol == "sqlite":
+        await post_upgrade(f"sqlite://{conn._path}", master_pw)
+    elif conn._protocol == "postgres":
+        await post_upgrade(conn._path[0], master_pw)
     print("done")
 
 
-if __name__ == "__main__":
+def main():
     logging.basicConfig(level=logging.WARN)
 
     if len(sys.argv) < 2:
@@ -760,6 +582,15 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         raise SystemExit("Missing database master password")
 
-    conn = SqliteConnection(sys.argv[1])
+    if sys.argv[1][0:8] == "postgres":
+        print("DB type: pgsql")
+        r = urlparse(sys.argv[1])
+
+        conn = PgConnection(f"{r.hostname}:{r.port}", r.path[1:], r.username, r.password, sys.argv[1])
+    else:
+        print("DB type: sqlite")
+
+        conn = SqliteConnection(sys.argv[1])
+
     key = sys.argv[2]  # Faber.Agent372766
-    asyncio.get_event_loop().run_until_complete(upgrade(conn, key))
+    asyncio.run(upgrade(conn, key))

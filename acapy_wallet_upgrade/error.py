@@ -1,0 +1,4 @@
+
+
+class UpgradeError(Exception):
+    pass
