@@ -46,10 +46,10 @@ def test_migration_dbpw(tmp_path):
 
     # docker stuff
     client = docker.from_env()
-    container = client.containers.prune("indy-demo-postgres")
-    if container:
-        container.stop()
-        container.kill()
+    #container = client.containers.get("indy-demo-postgres")
+    #if container:
+    #    container.stop()
+    #    container.kill()
     container = client.containers.run(
         "postgres:11",
         name="indy-demo-postgres",
@@ -58,5 +58,5 @@ def test_migration_dbpw(tmp_path):
         environment=["POSTGRES_PASSWORD=mysecretpassword"],
         detach=True,
     )
-    container.kill()
+    #container.kill()
     print(container.id)
