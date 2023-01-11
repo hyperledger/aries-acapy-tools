@@ -42,16 +42,21 @@ def test_migration_dbpw(tmp_path):
 
     src = Path("input/dbpw")
     dst = d / "dbpw"
-    shutil.copyfile(src, dst)
+    shutil.copytree(src, dst)
 
+    # docker stuff
     client = docker.from_env()
-
-    container_id = client.create_container(
-        'postgres:11', "localhost", volumes=[f'{dst}:/var/lib/postgresql/data'],
-        host_config=docker.utils.create_host_config(binds={
-            '/home/user1/': {
-                'bind': f'{dst}:/var/lib/postgresql/data',
-                'ro': True
-            }
-        })
+    container = client.containers.prune("indy-demo-postgres")
+    if container:
+        container.stop()
+        container.kill()
+    container = client.containers.run(
+        "postgres:11",
+        name="indy-demo-postgres",
+        volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
+        ports={"5432/tcp": 5432},
+        environment=["POSTGRES_PASSWORD=mysecretpassword"],
+        detach=True,
     )
+    container.kill()
+    print(container.id)
