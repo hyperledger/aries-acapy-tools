@@ -1,3 +1,4 @@
+import contextlib
 import shutil
 from pathlib import Path
 import time
@@ -11,6 +12,7 @@ from acapy_wallet_upgrade.sqlite_connection import SqliteConnection
 
 
 def docker_stop(client):
+    """Stop indy-demo-postgres container."""
     try:
         container = client.containers.get("indy-demo-postgres")
     except docker.errors.NotFound:
@@ -19,16 +21,22 @@ def docker_stop(client):
         container.stop()
 
 
-def postgres_start_with_volume(tmp_path, bd_src):
+def copy_db_into_temp(tmp_path, bd_src):
+    """Copy database into temp directory."""
     src = Path(f"input/{bd_src}")
     d = tmp_path / "sub"
     d.mkdir()
     dst = d / bd_src
     shutil.copytree(src, dst)
+    return dst
 
+
+def postgres_start_with_volume(tmp_path, bd_src):
+    """Run indy-demo-postgres container with a stored volume using a temp directory."""
+    dst = copy_db_into_temp(tmp_path, bd_src)
     client = docker.from_env()
     docker_stop(client)
-    try:
+    with contextlib.suppress(Exception):
         client.containers.run(
             "postgres:11",
             name="indy-demo-postgres",
@@ -39,21 +47,32 @@ def postgres_start_with_volume(tmp_path, bd_src):
             detach=True,
         )
         time.sleep(4)
-    except:
-        pass  # TODO: handle error
     return
 
 
 async def migrate_pg_db(db_name, key):
+    """Run migration script on postgresql database."""
     db_host = "localhost"
-
+    db_port = 5432
+    user_name = "postgres"
+    db_user_password = "mysecretpassword"
     conn = PgConnection(
         db_host=db_host,
         db_name=db_name,
-        db_user="postgres",
-        db_pass="mysecretpassword",
-        path=f"postgres://postgres:mysecretpassword@{db_host}:5432/{db_name}",
+        db_user=user_name,
+        db_pass=db_user_password,
+        path=f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
     )
+    """
+    postgres[ql]://[username[:password]@][host[:port],]/database[?parameter_list]
+    \_____________/\____________________/\____________/\_______/\_______________/
+        |                   |                  |          |            |
+        |- schema           |- userspec        |          |            |- parameter list
+                                               |          |
+                                               |          |- database name
+                                               |
+                                               |- hostspec
+    """
     await upgrade(conn, key)
 
 
