@@ -10,6 +10,53 @@ from acapy_wallet_upgrade.pg_connection import PgConnection
 from acapy_wallet_upgrade.sqlite_connection import SqliteConnection
 
 
+def docker_stop(client):
+    try:
+        container = client.containers.get("indy-demo-postgres")
+    except docker.errors.NotFound:
+        pass
+    else:
+        container.stop()
+
+
+def postgres_start_with_volume(tmp_path, bd_src):
+    src = Path(f"input/{bd_src}")
+    d = tmp_path / "sub"
+    d.mkdir()
+    dst = d / bd_src
+    shutil.copytree(src, dst)
+
+    client = docker.from_env()
+    docker_stop(client)
+    try:
+        client.containers.run(
+            "postgres:11",
+            name="indy-demo-postgres",
+            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
+            ports={"5432/tcp": 5432},
+            environment=["POSTGRES_PASSWORD=mysecretpassword"],
+            auto_remove=True,
+            detach=True,
+        )
+        time.sleep(4)
+    except:
+        pass  # TODO: handle error
+    return
+
+
+async def migrate_pg_db(db_name, key):
+    db_host = "localhost"
+
+    conn = PgConnection(
+        db_host=db_host,
+        db_name=db_name,
+        db_user="postgres",
+        db_pass="mysecretpassword",
+        path=f"postgres://postgres:mysecretpassword@{db_host}:5432/{db_name}",
+    )
+    await upgrade(conn, key)
+
+
 @pytest.mark.asyncio
 async def test_migration_sqlite(tmp_path):
     """
@@ -39,87 +86,15 @@ async def test_migration_dbpw(tmp_path):
     """
     Run the migration script with the db in the docker container.
     """
-    src = Path("input/dbpw")
-    d = tmp_path / "sub"
-    d.mkdir()
-    dst = d / "dbpw"
-    shutil.copytree(src, dst)
+    postgres_start_with_volume(tmp_path, "dbpw")
+    await migrate_pg_db("alice", "insecure")
+    await migrate_pg_db("bob", "insecure")
 
-    client = docker.from_env()
-
-    try:
-        container = client.containers.get("indy-demo-postgres")
-    except docker.errors.NotFound:
-        pass
-    else:
-        container.stop()
-    try:
-        container = client.containers.run(
-            "postgres:11",
-            name="indy-demo-postgres",
-            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
-            ports={"5432/tcp": 5432},
-            environment=["POSTGRES_PASSWORD=mysecretpassword"],
-            auto_remove=True,
-            detach=True,
-        )
-        time.sleep(4)
-
-        conn = PgConnection(
-            db_host = "localhost",
-            db_name = "alice",
-            db_user = "postgres",
-            db_pass = "mysecretpassword",
-            path = "postgres://postgres:mysecretpassword@localhost:5432/alice"
-        )
-        key = "insecure"
-        await upgrade(conn, key)
-        container.stop()
-    except:
-            pass  # shh, Conceal it. Don't feel it. Don't let it show.
-        
 
 @pytest.mark.asyncio
 async def test_migration_mwst(tmp_path):
     """
     Run the migration script with the db in the docker container.
     """
-    src = Path("input/mwst")
-    d = tmp_path / "sub"
-    d.mkdir()
-    dst = d / "mwst"
-    shutil.copytree(src, dst)
-
-    client = docker.from_env()
-
-    try:
-        container = client.containers.get("indy-demo-postgres")
-    except docker.errors.NotFound:
-        pass
-    else:
-        container.stop()
-    try:
-        container = client.containers.run(
-            "postgres:11",
-            name="indy-demo-postgres",
-            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
-            ports={"5432/tcp": 5432},
-            environment=["POSTGRES_PASSWORD=mysecretpassword"],
-            auto_remove=True,
-            detach=True,
-        )
-        time.sleep(4)
-        conn = PgConnection(
-        db_host = "localhost",
-        db_name = "wallets",
-        db_user = "postgres",
-        db_pass= "mysecretpassword",
-        path = "postgres://postgres:mysecretpassword@localhosts:5432/wallets"
-        )
-        key = "insecure"
-        await upgrade(conn, key)
-        container.stop()
-    except:
-        pass  # TODO: handle errors
-
-
+    postgres_start_with_volume(tmp_path, "mwst")
+    await migrate_pg_db("wallets", "insecure")
