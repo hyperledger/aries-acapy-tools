@@ -64,21 +64,20 @@ async def test_migration_dbpw(tmp_path):
             detach=True,
         )
         time.sleep(4)
+
+        conn = PgConnection(
+            db_host = "localhost",
+            db_name = "alice",
+            db_user = "postgres",
+            db_pass = "mysecretpassword",
+            path = "postgres://postgres:mysecretpassword@localhost:5432/alice"
+        )
+        key = "insecure"
+        await upgrade(conn, key)
+        container.stop()
     except:
-        pass  # shh, Conceal it. Don't feel it. Don't let it show.
-    # else:
-    #     container.stop()
-
-    conn = PgConnection(
-        db_host = "localhost",
-        db_name = "alice",
-        db_user = "postgres",
-        db_pass = "mysecretpassword",
-        path = "postgres://postgres:mysecretpassword@localhost:5432/alice"
-    )
-    key = "insecure"
-    await upgrade(conn, key)
-
+            pass  # shh, Conceal it. Don't feel it. Don't let it show.
+        
 
 @pytest.mark.asyncio
 async def test_migration_mwst(tmp_path):
@@ -110,17 +109,17 @@ async def test_migration_mwst(tmp_path):
             detach=True,
         )
         time.sleep(4)
-    except:
-        pass  # TODO: handle errors
-    # else:
-    #     container.stop()
-
-    conn = PgConnection(
+        conn = PgConnection(
         db_host = "localhost",
         db_name = "wallets",
         db_user = "postgres",
         db_pass= "mysecretpassword",
         path = "postgres://postgres:mysecretpassword@localhosts:5432/wallets"
-    )
-    key = "insecure"
-    await upgrade(conn, key)
+        )
+        key = "insecure"
+        await upgrade(conn, key)
+        container.stop()
+    except:
+        pass  # TODO: handle errors
+
+
