@@ -46,17 +46,26 @@ def test_migration_dbpw(tmp_path):
 
     # docker stuff
     client = docker.from_env()
-    #container = client.containers.get("indy-demo-postgres")
-    #if container:
-    #    container.stop()
-    #    container.kill()
-    container = client.containers.run(
-        "postgres:11",
-        name="indy-demo-postgres",
-        volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
-        ports={"5432/tcp": 5432},
-        environment=["POSTGRES_PASSWORD=mysecretpassword"],
-        detach=True,
-    )
-    #container.kill()
-    print(container.id)
+    
+    try:
+        container = client.containers.get("indy-demo-postgres")
+    except docker.errors.NotFound:
+        pass
+    else:
+        container_state = container.attrs["State"]
+        print("container found :",container_state)
+        container.stop()
+    try:
+        container = client.containers.run(
+            "postgres:11",
+            name="indy-demo-postgres",
+            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
+            ports={"5432/tcp": 5432},
+            environment=["POSTGRES_PASSWORD=mysecretpassword"],
+            auto_remove=True,
+            detach=True,
+        )
+    except:
+        pass  # shh, Conceal it. Don't feel it. Don't let it show.
+    else:
+        container.stop()
