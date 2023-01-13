@@ -31,6 +31,9 @@ class PostgresqlCommands:
                         );
                         CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
                     """
+    insert_into_profiles= """
+                    INSERT INTO profiles (name, profile_key) VALUES($1, $2)
+                """
     create_items = """
                         ALTER TABLE items RENAME TO items_old;
                         CREATE TABLE items (

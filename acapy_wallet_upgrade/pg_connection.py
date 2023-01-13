@@ -63,6 +63,11 @@ class PgConnection(DbConnection):
 
         return found[0][0]
 
+    async def _create_table(self, table, cmd):
+        if not await self.find_table(table):
+            async with self._conn.transaction():
+                await self._conn.execute(cmd)
+
     async def pre_upgrade(self) -> dict:
         """Add new tables and columns."""
         print("\nfx pre_upgrade(self)\n")
@@ -78,21 +83,12 @@ class PgConnection(DbConnection):
                     config[row[0]] = row[1]
             return config
         else:
-            await self.find_table("config")
             async with self._conn.transaction():
                 await self._conn.execute(sql_commands.create_config)
 
-        if not await self.find_table("profiles"):
-            async with self._conn.transaction():
-                await self._conn.execute(sql_commands.create_profiles)
-
-        if not await self.find_table("items_old"):
-            async with self._conn.transaction():
-                await self._conn.execute(sql_commands.create_items)
-
-        if not await self.find_table("items_tags"):
-            async with self._conn.transaction():
-                await self._conn.execute(sql_commands.create_items_tags)
+        await self._create_table("profiles", sql_commands.create_profiles)
+        await self._create_table("items_old", sql_commands.create_items)
+        await self._create_table("items_tags", sql_commands.create_items_tags)
 
         return {}
 
@@ -113,9 +109,7 @@ class PgConnection(DbConnection):
             )
 
             await self._conn.execute(
-                """
-                    INSERT INTO profiles (name, profile_key) VALUES($1, $2)
-                """,
+                sql_commands.insert_into_profiles,
                 name,
                 key,
             )
