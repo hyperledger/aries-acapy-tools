@@ -51,7 +51,7 @@ def postgres_start_with_volume(tmp_path, bd_src):
     return
 
 
-async def migrate_pg_db(db_name, key, mode = None):
+async def migrate_pg_db(db_name, key, mode=None):
     """Run migration script on postgresql database."""
     db_host = "localhost"
     db_port = 5432

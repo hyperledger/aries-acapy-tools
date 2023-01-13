@@ -167,7 +167,9 @@ async def init_profile(conn: DbConnection, indy_key: dict) -> dict:
         if conn.DB_TYPE == "pgsql_mwst":
             wallet_id_set = await conn.find_wallet_ids()
             for wallet_id in wallet_id_set:
-                await conn.insert_profile(pass_key, wallet_id, str(uuid.uuid4()), enc_pk)
+                await conn.insert_profile(
+                    pass_key, wallet_id, str(uuid.uuid4()), enc_pk
+                )
         else:
             await conn.insert_profile(pass_key, str(uuid.uuid4()), enc_pk)
 
@@ -186,18 +188,24 @@ def encrypt_merged(message: bytes, my_key: bytes, hmac_key: bytes = None) -> byt
     print(" ")
 
     if hmac_key:
-        nonce = hmac.HMAC(hmac_key, message, digestmod=hashlib.sha256).digest()[:CHACHAPOLY_NONCE_LEN]
+        nonce = hmac.HMAC(hmac_key, message, digestmod=hashlib.sha256).digest()[
+            :CHACHAPOLY_NONCE_LEN
+        ]
     else:
         nonce = os.urandom(CHACHAPOLY_NONCE_LEN)
 
-    ciphertext = nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt(message, None, nonce, my_key)
+    ciphertext = nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt(
+        message, None, nonce, my_key
+    )
 
     return nonce + ciphertext
 
 
 def encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes) -> bytes:
     print(" ")
-    print("fx encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes)")
+    print(
+        "fx encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes)"
+    )
     print("category: ")
     pprint.pprint(category, indent=2)
     print("name: ")
@@ -610,7 +618,7 @@ async def upgrade(conn: DbConnection, master_pw: str):
             pprint.pprint(indy_key_list, indent=2)
             print(" ")
             for indy_key in indy_key_list:
-                print('indy key using here: ', indy_key)
+                print("indy key using here: ", indy_key)
                 profile_key = await init_profile(conn, indy_key)
                 print(" ")
                 print("fx upgrade(db, master_pw)")
@@ -641,7 +649,7 @@ async def upgrade(conn: DbConnection, master_pw: str):
     if conn._protocol == "sqlite":
         await post_upgrade(f"sqlite://{conn._path}", master_pw)
     elif conn._protocol == "postgres":
-        await post_upgrade(conn._path[0], master_pw)
+        await post_upgrade(conn._path, master_pw)
     print("done")
 
 
@@ -657,7 +665,9 @@ def main():
         print("DB type: pgsql")
         r = urlparse(sys.argv[1])
 
-        conn = PgConnection(f"{r.hostname}:{r.port}", r.path[1:], r.username, r.password, sys.argv[1])
+        conn = PgConnection(
+            f"{r.hostname}:{r.port}", r.path[1:], r.username, r.password, sys.argv[1]
+        )
     else:
         print("DB type: sqlite")
 
