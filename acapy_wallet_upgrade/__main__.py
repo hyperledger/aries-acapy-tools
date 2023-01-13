@@ -38,6 +38,49 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
     print(f"fx fetch_indy_key(conn: DbConnection, key_pass: {key_pass})")
     print(" ")
 
+    if conn.DB_TYPE == "pgsql_mwst":
+        metadata_row: list = await conn.fetch_multiple("SELECT value FROM metadata")
+        print("metadata row: ", metadata_row)
+        indy_keys_list = []
+        print("keypass now: ", key_pass)
+        key_pass = key_pass.encode("ascii")
+        for metadata_json in metadata_row:
+            metadata = json.loads(metadata_json[0])
+            keys_enc = bytes(metadata["keys"])
+            salt = bytes(metadata["master_key_salt"])
+
+            print("Deriving wallet key...")
+            salt = salt[:16]
+            master_key = nacl.pwhash.argon2i.kdf(
+                CHACHAPOLY_KEY_LEN,
+                key_pass,
+                salt,
+                nacl.pwhash.argon2i.OPSLIMIT_MODERATE,
+                nacl.pwhash.argon2i.MEMLIMIT_MODERATE,
+            )
+
+            print("Opening wallet...")
+            keys_mpk = decrypt_merged(keys_enc, master_key)
+            keys_lst = msgpack.unpackb(keys_mpk)
+            keys = dict(
+                zip(
+                    (
+                        "type",
+                        "name",
+                        "value",
+                        "item_hmac",
+                        "tag_name",
+                        "tag_value",
+                        "tag_hmac",
+                    ),
+                    keys_lst,
+                )
+            )
+            keys["master"] = master_key
+            keys["salt"] = salt
+            indy_keys_list.append(keys)
+        return indy_keys_list
+
     metadata_row = await conn.fetch_one("SELECT value FROM metadata")
     metadata_json = metadata_row[0]
     metadata = json.loads(metadata_json)
@@ -121,7 +164,12 @@ async def init_profile(conn: DbConnection, indy_key: dict) -> dict:
         pprint.pprint(enc_pk, indent=2)
         print(" ")
 
-        await conn.insert_profile(pass_key, str(uuid.uuid4()), enc_pk)
+        if conn.DB_TYPE == "pgsql_mwst":
+            wallet_id_set = await conn.find_wallet_ids()
+            for wallet_id in wallet_id_set:
+                await conn.insert_profile(pass_key, wallet_id, str(uuid.uuid4()), enc_pk)
+        else:
+            await conn.insert_profile(pass_key, str(uuid.uuid4()), enc_pk)
 
     return profile_key
 
@@ -289,7 +337,10 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
 
         upd = []
         for row in rows:
-            result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
+            if conn.DB_TYPE == "pgsql_mwst":
+                result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql_mwst")
+            else:
+                result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
             pprint.pprint(result, indent=2)
             upd.append(update_item(result, profile_key))
         await conn.update_items(upd)
@@ -550,6 +601,26 @@ async def upgrade(conn: DbConnection, master_pw: str):
 
     try:
         await conn.pre_upgrade()
+
+        if conn.DB_TYPE == "pgsql_mwst":
+            indy_key_list: list[dict] = await fetch_indy_key(conn, master_pw)
+            print(" ")
+            print(f"fx upgrade(db: DbConnection, master_pw: {master_pw})")
+            print("indy_key!!!!")
+            pprint.pprint(indy_key_list, indent=2)
+            print(" ")
+            for indy_key in indy_key_list:
+                print('indy key using here: ', indy_key)
+                profile_key = await init_profile(conn, indy_key)
+                print(" ")
+                print("fx upgrade(db, master_pw)")
+                print("profile_key: ")
+                print(" ")
+                pprint.pprint(profile_key, indent=2)
+                await update_items(conn, indy_key, profile_key)
+                await conn.finish_upgrade()
+                print("Finished schema upgrade")
+
         indy_key = await fetch_indy_key(conn, master_pw)
         print(" ")
         print(f"fx upgrade(db: DbConnection, master_pw: {master_pw})")
