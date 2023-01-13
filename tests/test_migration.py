@@ -8,6 +8,7 @@ import docker
 
 from acapy_wallet_upgrade.__main__ import upgrade
 from acapy_wallet_upgrade.pg_connection import PgConnection
+from acapy_wallet_upgrade.pg_connection_mwst import PgConnectionMWST
 from acapy_wallet_upgrade.sqlite_connection import SqliteConnection
 
 
@@ -50,19 +51,28 @@ def postgres_start_with_volume(tmp_path, bd_src):
     return
 
 
-async def migrate_pg_db(db_name, key):
+async def migrate_pg_db(db_name, key, mode = None):
     """Run migration script on postgresql database."""
     db_host = "localhost"
     db_port = 5432
     user_name = "postgres"
     db_user_password = "mysecretpassword"
-    conn = PgConnection(
-        db_host=db_host,
-        db_name=db_name,
-        db_user=user_name,
-        db_pass=db_user_password,
-        path=f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
-    )
+    if mode == "pgsql_mwst":
+        conn = PgConnectionMWST(
+            db_host=db_host,
+            db_name=db_name,
+            db_user=user_name,
+            db_pass=db_user_password,
+            path=f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
+        )
+    else:
+        conn = PgConnection(
+            db_host=db_host,
+            db_name=db_name,
+            db_user=user_name,
+            db_pass=db_user_password,
+            path=f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
+        )
     """
     postgres[ql]://[username[:password]@][host[:port],]/database[?parameter_list]
     \_____________/\____________________/\____________/\_______/\_______________/
@@ -116,4 +126,4 @@ async def test_migration_mwst(tmp_path):
     Run the migration script with the db in the docker container.
     """
     postgres_start_with_volume(tmp_path, "mwst")
-    await migrate_pg_db("wallets", "insecure")
+    await migrate_pg_db("wallets", "insecure", "pgsql_mwst")
