@@ -30,7 +30,7 @@ class PgConnection(DbConnection):
             "password": db_pass,
         }
         self._conn: asyncpg.Connection = None
-        self._path: str = (path,)
+        self._path: str = path
         self._protocol: str = "postgres"
 
     @property

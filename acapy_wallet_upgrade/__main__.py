@@ -649,7 +649,7 @@ async def upgrade(conn: DbConnection, master_pw: str):
     if conn._protocol == "sqlite":
         await post_upgrade(f"sqlite://{conn._path}", master_pw)
     elif conn._protocol == "postgres":
-        await post_upgrade(conn._path[0], master_pw)
+        await post_upgrade(conn._path, master_pw)
     print("done")
 
 
