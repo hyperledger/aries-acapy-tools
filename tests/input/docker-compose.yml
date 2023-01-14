@@ -123,6 +123,7 @@ services:
         --wallet-type indy
         --wallet-name bob
         --wallet-key insecure
+        --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","max_connections":5}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
         --preserve-exchange-records
