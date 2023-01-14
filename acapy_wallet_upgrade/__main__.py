@@ -164,14 +164,7 @@ async def init_profile(conn: DbConnection, indy_key: dict) -> dict:
         pprint.pprint(enc_pk, indent=2)
         print(" ")
 
-        if conn.DB_TYPE == "pgsql_mwst":
-            wallet_id_set = await conn.find_wallet_ids()
-            for wallet_id in wallet_id_set:
-                await conn.insert_profile(
-                    pass_key, wallet_id, str(uuid.uuid4()), enc_pk
-                )
-        else:
-            await conn.insert_profile(pass_key, str(uuid.uuid4()), enc_pk)
+        await conn.insert_profile(pass_key, str(uuid.uuid4()), enc_pk)
 
     return profile_key
 
