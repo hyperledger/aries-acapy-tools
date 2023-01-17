@@ -14,6 +14,7 @@ import re
 import pprint
 import sys
 import uuid
+from acapy_wallet_upgrade.pg_connection_mwst import PgConnectionMWST
 
 import base58
 import cbor2
@@ -347,11 +348,11 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
         await conn.update_items(upd)
 
 
-async def post_upgrade(uri: str, master_pw: str):
+async def post_upgrade(uri: str, wallet_pw: str):
     from aries_askar import Key, Store
 
     print("Opening wallet with Askar...")
-    store = await Store.open(uri, pass_key=master_pw)
+    store = await Store.open(uri, pass_key=wallet_pw)
 
     print("Updating keys...", end="")
     upd_count = 0
@@ -597,16 +598,23 @@ def _credential_tags(cred_data: dict) -> dict:
     return tags
 
 
-async def upgrade(conn: DbConnection, master_pw: str):
+async def upgrade(
+    conn: DbConnection,
+    wallet_pw: str,
+    profile_store_name: str = None,
+    wallet_keys: str = None,
+    base_wallet_name: str = None,
+    base_wallet_key: str = None,
+    ):
     await conn.connect()
 
     try:
         await conn.pre_upgrade()
 
         if conn.DB_TYPE == "pgsql_mwst":
-            indy_key_list: list[dict] = await fetch_indy_key(conn, master_pw)
+            indy_key_list: list[dict] = await fetch_indy_key(conn, wallet_pw)
             print(" ")
-            print(f"fx upgrade(db: DbConnection, master_pw: {master_pw})")
+            print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
             print("indy_key!!!!")
             pprint.pprint(indy_key_list, indent=2)
             print(" ")
@@ -614,7 +622,7 @@ async def upgrade(conn: DbConnection, master_pw: str):
                 print("indy key using here: ", indy_key)
                 profile_key = await init_profile(conn, indy_key)
                 print(" ")
-                print("fx upgrade(db, master_pw)")
+                print("fx upgrade(db, wallet_pw)")
                 print("profile_key: ")
                 print(" ")
                 pprint.pprint(profile_key, indent=2)
@@ -622,15 +630,15 @@ async def upgrade(conn: DbConnection, master_pw: str):
                 await conn.finish_upgrade()
                 print("Finished schema upgrade")
 
-        indy_key = await fetch_indy_key(conn, master_pw)
+        indy_key = await fetch_indy_key(conn, wallet_pw)
         print(" ")
-        print(f"fx upgrade(db: DbConnection, master_pw: {master_pw})")
+        print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
         print("indy_key")
         pprint.pprint(indy_key, indent=2)
         print(" ")
         profile_key = await init_profile(conn, indy_key)
         print(" ")
-        print("fx upgrade(db, master_pw)")
+        print("fx upgrade(db, wallet_pw)")
         print("profile_key: ")
         print(" ")
         pprint.pprint(profile_key, indent=2)
@@ -639,32 +647,44 @@ async def upgrade(conn: DbConnection, master_pw: str):
         print("Finished schema upgrade")
     finally:
         await conn.close()
-    if conn._protocol == "sqlite":
-        await post_upgrade(f"sqlite://{conn._path}", master_pw)
-    elif conn._protocol == "postgres":
-        await post_upgrade(conn._path, master_pw)
+    if conn.DB_TYPE == "sqlite":
+        await post_upgrade(f"sqlite://{conn._path}", wallet_pw)
+    else:    # TODO: update for the 3 different postgres cases
+        await post_upgrade(conn._path, wallet_pw)
     print("done")
 
 
-def main():
+async def migration(
+    mode: str,
+    wallet_pw: str,
+    db_path: str = None,
+    profile_store_name: str = None,
+    wallet_keys: str = None,
+    base_wallet_name: str = None,
+    base_wallet_key: str = None,
+    ):
     logging.basicConfig(level=logging.WARN)
 
-    if len(sys.argv) < 2:
-        raise SystemExit("Missing database URL")
-    if len(sys.argv) < 3:
-        raise SystemExit("Missing database master password")
+    if mode == "sqlite":
+        conn = SqliteConnection(db_path)
 
-    if sys.argv[1][0:8] == "postgres":
-        print("DB type: pgsql")
-        r = urlparse(sys.argv[1])
+    elif mode == "dbpw":
+        conn = PgConnection(db_path)
 
-        conn = PgConnection(
-            f"{r.hostname}:{r.port}", r.path[1:], r.username, r.password, sys.argv[1]
-        )
+    elif mode == "mwst_as_profiles":
+        conn = PgConnectionMWST(db_path)
+
+    elif mode == "mwst_as_separate_stores":
+        conn = PgConnectionMWST(db_path)  # TODO: create new class?
+
     else:
-        print("DB type: sqlite")
+        raise UpgradeError(f"Invalid mode")
 
-        conn = SqliteConnection(sys.argv[1])
-
-    key = sys.argv[2]  # Faber.Agent372766
-    asyncio.run(upgrade(conn, key))
+    await upgrade(
+        conn,
+        wallet_pw,
+        profile_store_name,
+        wallet_keys,
+        base_wallet_name,
+        base_wallet_key
+    )
