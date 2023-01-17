@@ -16,30 +16,12 @@ class PgConnection(DbConnection):
 
     def __init__(
         self,
-        db_host: str,
-        db_name: str,
-        db_user: str,
-        db_pass: str,
         path: str,
     ):
         """Initialize a PgConnection instance."""
-        self._config = {
-            "host": db_host,
-            "db": db_name,
-            "user": db_user,
-            "password": db_pass,
-        }
-        self._conn: asyncpg.Connection = None
         self._path: str = path
-        self._protocol: str = "postgres"
-
-    @property
-    def parsed_url(self):
-        """Accessor for the parsed database URL."""
-        url = self._config["host"]
-        if "://" not in url:
-            url = f"http://{url}"
-        return urlparse(url)
+        self.parsed_url = urlparse(path)
+        self._conn: asyncpg.Connection = None
 
     async def connect(self):
         """Accessor for the connection pool instance."""
@@ -48,9 +30,9 @@ class PgConnection(DbConnection):
             self._conn = await asyncpg.connect(
                 host=parts.hostname,
                 port=parts.port or 5432,
-                user=self._config["user"],
-                password=self._config["password"],
-                database=self._config["db"],
+                user=parts.username,
+                password=parts.password,
+                database=parts.path[1:],
             )
 
     async def find_table(self, name: str) -> bool:

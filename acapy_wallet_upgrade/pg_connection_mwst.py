@@ -16,20 +16,11 @@ class PgConnectionMWST(PgConnection):
 
     def __init__(
         self,
-        db_host: str,
-        db_name: str,
-        db_user: str,
-        db_pass: str,
         path: str,
-    ) -> "PgConnectionMWST":
+    ):
         """Initialize a PgConnectionMWST instance."""
-        super().__init__(
-            db_host,
-            db_name,
-            db_user,
-            db_pass,
-            path,
-        )
+        self._path: str = path
+        super().__init__(path)
 
     async def find_wallet_ids(self) -> set:
         """Retrieve set of wallet ids."""
