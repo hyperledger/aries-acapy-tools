@@ -6,10 +6,7 @@ import time
 import pytest
 import docker
 
-from acapy_wallet_upgrade.__main__ import upgrade
-from acapy_wallet_upgrade.pg_connection import PgConnection
-from acapy_wallet_upgrade.pg_connection_mwst import PgConnectionMWST
-from acapy_wallet_upgrade.sqlite_connection import SqliteConnection
+from acapy_wallet_upgrade.__main__ import migration
 
 
 def docker_stop(client):
@@ -51,28 +48,20 @@ def postgres_start_with_volume(tmp_path, bd_src):
     return
 
 
-async def migrate_pg_db(db_name, key, mode=None):
+async def migrate_pg_db(
+    db_name: str,
+    key: str,
+    mode: str,
+    profile_store_name: str = None,
+    wallet_keys: str = None,
+    base_wallet_name: str = None,
+    base_wallet_key: str = None,
+    ):
     """Run migration script on postgresql database."""
     db_host = "localhost"
     db_port = 5432
     user_name = "postgres"
     db_user_password = "mysecretpassword"
-    if mode == "pgsql_mwst":
-        conn = PgConnectionMWST(
-            db_host=db_host,
-            db_name=db_name,
-            db_user=user_name,
-            db_pass=db_user_password,
-            path=f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
-        )
-    else:
-        conn = PgConnection(
-            db_host=db_host,
-            db_name=db_name,
-            db_user=user_name,
-            db_pass=db_user_password,
-            path=f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
-        )
     """
     postgres[ql]://[username[:password]@][host[:port],]/database[?parameter_list]
     \_____________/\____________________/\____________/\_______/\_______________/
@@ -83,7 +72,15 @@ async def migrate_pg_db(db_name, key, mode=None):
                                                |
                                                |- hostspec
     """
-    await upgrade(conn, key)
+    await migration(
+        mode,
+        key,
+        f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
+        profile_store_name,
+        wallet_keys,
+        base_wallet_name,
+        base_wallet_key
+    )
 
 
 @pytest.mark.asyncio
@@ -99,15 +96,21 @@ async def test_migration_sqlite(tmp_path):
     src_alice = Path("input/alice.db")
     dst_alice = d / "alice.db"
     shutil.copyfile(src_alice, dst_alice)
-    conn_alice = SqliteConnection(dst_alice)
-    await upgrade(conn_alice, key)
+    await migration(
+        "sqlite",
+        key,
+        dst_alice
+    )
 
     # Bob
     src_bob = Path("input/bob.db")
     dst_bob = d / "bob.db"
     shutil.copyfile(src_bob, dst_bob)
-    conn_bob = SqliteConnection(dst_bob)
-    await upgrade(conn_bob, key)
+    await migration(
+        "sqlite",
+        key,
+        dst_bob
+    )
 
 
 @pytest.mark.asyncio
@@ -116,14 +119,31 @@ async def test_migration_dbpw(tmp_path):
     Run the migration script with the db in the docker container.
     """
     postgres_start_with_volume(tmp_path, "dbpw")
-    await migrate_pg_db("alice", "insecure")
-    await migrate_pg_db("bob", "insecure")
+    await migrate_pg_db("alice", "insecure", "dbpw")
+    await migrate_pg_db("bob", "insecure", "dbpw")
 
 
 @pytest.mark.asyncio
-async def test_migration_mwst(tmp_path):
+async def test_migration_mwst_as_profiles(tmp_path):
     """
     Run the migration script with the db in the docker container.
     """
-    postgres_start_with_volume(tmp_path, "mwst")
-    await migrate_pg_db("wallets", "insecure", "pgsql_mwst")
+    postgres_start_with_volume(tmp_path, "mwst")  # TODO: update mwst
+    await migrate_pg_db(
+        "wallets",
+        "insecure",
+        "mwst_as_profiles",
+        profile_store_name = "profile_store_name",   # TODO: update from placeholders
+        wallet_keys = "wallet_keys",
+        base_wallet_name = "base_wallet_name",
+        base_wallet_key = "base_wallet_key"
+        )
+
+
+@pytest.mark.asyncio
+async def test_migration_mwst_as_separate_stores(tmp_path):
+    """
+    Run the migration script with the db in the docker container.
+    """
+    postgres_start_with_volume(tmp_path, "mwst")  # TODO: update mwst
+    await migrate_pg_db("wallets", "insecure", "mwst_as_separate_stores")
