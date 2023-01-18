@@ -223,7 +223,7 @@ services:
     container_name: agency-mwst
     image: docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5
     ports:
-      - "3002:3001"
+      - "3001:3001"
     command: >
       start -it http 0.0.0.0 3000
         --label Agency
