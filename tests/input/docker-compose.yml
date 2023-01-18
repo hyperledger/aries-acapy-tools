@@ -233,6 +233,9 @@ services:
         --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","wallet_scheme":"MultiWalletSingleTable"}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
+        --multitenant
+        --multitenant-admin
+        --jwt-secret insecure
         --preserve-exchange-records
         --auto-provision
         --monitor-revocation-notification
