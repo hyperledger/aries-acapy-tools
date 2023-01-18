@@ -320,12 +320,22 @@ async def with_mt_agents():
     async with Controller(AGENCY) as agency:
         alice_wallet = await agency.post(
             "/multitenancy/wallet",
-            json={"label": "Alice", "wallet_name": "alice", "wallet_key": "insecure"},
+            json={
+                "label": "Alice",
+                "wallet_name": "alice",
+                "wallet_key": "insecure",
+                "wallet_type": "indy",
+            },
             response=CreateWalletResponse,
         )
         bob_wallet = await agency.post(
             "/multitenancy/wallet",
-            json={"label": "Bob", "wallet_name": "bob", "wallet_key": "insecure"},
+            json={
+                "label": "Bob",
+                "wallet_name": "bob",
+                "wallet_key": "insecure",
+                "wallet_type": "indy",
+            },
             response=CreateWalletResponse,
         )
 
