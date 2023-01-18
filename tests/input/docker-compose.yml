@@ -9,6 +9,12 @@ services:
     environment:
       - POSTGRES_PASSWORD=mysecretpassword
     command: ["postgres", "-c", "log_statement=all", "-c", "log_destination=stderr"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 60s
+      retries: 5
+      start_period: 10s
 
   alice-sqlite:
     container_name: alice-sqlite
@@ -105,7 +111,7 @@ services:
       tails:
         condition: service_started
       db:
-        condition: service_started
+        condition: service_healthy
 
   bob-dbpw:
     container_name: bob-dbpw
@@ -140,7 +146,7 @@ services:
       tails:
         condition: service_started
       db:
-        condition: service_started
+        condition: service_healthy
 
   alice-mwst:
     container_name: alice-mwst
@@ -176,7 +182,7 @@ services:
       tails:
         condition: service_started
       db:
-        condition: service_started
+        condition: service_healthy
 
   bob-mwst:
     container_name: bob-mwst
@@ -211,7 +217,7 @@ services:
       tails:
         condition: service_started
       db:
-        condition: service_started
+        condition: service_healthy
 
   agency-mwst:
     container_name: agency-mwst
@@ -249,7 +255,7 @@ services:
       tails:
         condition: service_started
       db:
-        condition: service_started
+        condition: service_healthy
 
   tails:
     image: ghcr.io/bcgov/tails-server:latest
