@@ -17,5 +17,10 @@ mwst: | juggernaut
 	docker cp db:/var/lib/postgresql/data mwst
 	docker-compose down -v
 
+mt-mwst: | juggernaut
+	docker-compose run juggernaut-mt-mwst
+	docker cp db:/var/lib/postgresql/data mt-mwst
+	docker-compose down -v
+
 
 .PHONY: sqlite juggernaut
