@@ -8,6 +8,7 @@ services:
       - 5432:5432
     environment:
       - POSTGRES_PASSWORD=mysecretpassword
+    command: ["postgres", "-c", "log_statement=all", "-c", "log_destination=stderr"]
 
   alice-sqlite:
     container_name: alice-sqlite
@@ -212,6 +213,41 @@ services:
       db:
         condition: service_started
 
+  agency-mwst:
+    container_name: agency-mwst
+    image: docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5
+    ports:
+      - "3002:3001"
+    command: >
+      start -it http 0.0.0.0 3000
+        --label Agency
+        -ot http
+        -e http://agency-mwst:3000
+        --admin 0.0.0.0 3001 --admin-insecure-mode
+        --log-level debug
+        --genesis-url https://raw.githubusercontent.com/Indicio-tech/indicio-network/main/genesis_files/pool_transactions_testnet_genesis
+        --tails-server-base-url http://tails:6543
+        --wallet-type indy
+        --wallet-name agency
+        --wallet-key insecure
+        --wallet-storage-type postgres_storage
+        --wallet-storage-config '{"url":"db:5432","wallet_scheme":"MultiWalletSingleTable"}'
+        --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
+        --preserve-exchange-records
+        --auto-provision
+        --monitor-revocation-notification
+    healthcheck:
+      test: curl -s -o /dev/null -w '%{http_code}' "http://localhost:3001/status/live" | grep "200" > /dev/null
+      start_period: 30s
+      interval: 7s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      tails:
+        condition: service_started
+      db:
+        condition: service_started
+
   tails:
     image: ghcr.io/bcgov/tails-server:latest
     ports:
@@ -265,4 +301,15 @@ services:
       alice-mwst:
         condition: service_healthy
       bob-mwst:
+        condition: service_healthy
+
+  juggernaut-mt-mwst:
+    build:
+      context: .
+    image: populate-indy-db
+    environment:
+      - AGENCY=http://agency-mwst:3001
+    command: populate_mt_db.py
+    depends_on:
+      agency-mwst:
         condition: service_healthy
