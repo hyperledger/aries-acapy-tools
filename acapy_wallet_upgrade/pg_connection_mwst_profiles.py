@@ -86,14 +86,15 @@ class PgConnectionMWSTProfiles(PgConnection):
         print(f"fx fetch_one(self, sql: {sql}, optional: {optional})")
 
         stmt: str = await self._conn.fetch(sql)
-        print("stmt here!", stmt)
         fetched = []
         if len(stmt) > 0:
             for row in stmt:
-                decoded = (base64.b64decode(bytes.decode(row[0])),)
-                fetched.append(decoded)
+                decoded = base64.b64decode(bytes.decode(row[1]))
+                wallet_id = row[0]
+                fetched.append(
+                    (wallet_id, decoded),
+                )
 
-        print("fetched now: ", fetched)
         if len(fetched) > 0:
             print("fetched: ")
             pprint.pprint(fetched, indent=2)
@@ -102,7 +103,15 @@ class PgConnectionMWSTProfiles(PgConnection):
         else:
             raise Exception("Row not found")
 
-    async def update_items(self, items):
+    async def fetch_pending_items(self, limit: int, wallet_id: str):
+        """Fetch un-updated items by wallet_id."""
+        print(" ")
+        print(f"fx fetch_pending_items(self, limit: {limit}, wallet_id: {wallet_id}")
+        return await self._conn.fetch(
+            sql_commands.pending_items_by_wallet_id, limit, wallet_id
+        )
+
+    async def update_items(self, items, profile_id: int = 1):
         """Update items in the database."""
         print(" ")
         print("fx update_items(self, items)")
@@ -115,8 +124,9 @@ class PgConnectionMWSTProfiles(PgConnection):
                 ins = await self._conn.fetch(
                     """
                         INSERT INTO items (profile_id, kind, category, name, value)
-                        VALUES (1, 2, $1, $2, $3) RETURNING id
+                        VALUES ($1, 2, $2, $3, $4) RETURNING id
                     """,
+                    profile_id,
                     item["category"],
                     item["name"],
                     item["value"],

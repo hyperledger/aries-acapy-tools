@@ -31,8 +31,9 @@ class PostgresqlCommands:
                         );
                         CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
                     """
-    insert_into_profiles= """
+    insert_into_profiles = """
                     INSERT INTO profiles (name, profile_key) VALUES($1, $2)
+                    ON CONFLICT DO NOTHING RETURNING id
                 """
     create_items = """
                         ALTER TABLE items RENAME TO items_old;
@@ -82,6 +83,14 @@ class PostgresqlCommands:
             (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
                 FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
             FROM items_old i LIMIT $1;
+            """
+    pending_items_by_wallet_id = """
+            SELECT i.wallet_id, i.id, i.type, i.name, i.value, i.key,
+            (SELECT string_agg(encode(te.name::bytea, 'hex') || ':' || encode(te.value::bytea, 'hex')::text, ',')
+                FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
+            (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
+                FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
+            FROM items_old i WHERE i.wallet_id = $2 LIMIT $1;
             """
     insert_into_items = """
                         INSERT INTO items (profile_id, kind, category, name, value)

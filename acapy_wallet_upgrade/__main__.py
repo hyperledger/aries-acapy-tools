@@ -357,7 +357,13 @@ def update_item(item: dict, key: dict) -> dict:
     return ret_val
 
 
-async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
+async def update_items(
+    conn: DbConnection,
+    indy_key: dict,
+    profile_key: dict,
+    wallet_id: str = None,
+    profile_id: int = None,
+):
     print(" ")
     print("fx update_items(conn: DbConnection, indy_key: dict, profile_key: dict)")
     print("indy_key: ")
@@ -367,22 +373,37 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
     print(" ")
 
     while True:
-        rows = await conn.fetch_pending_items(1)
-        if not rows:
-            break
+        if conn.DB_TYPE.startswith("pgsql_mwst_"):
+            rows = await conn.fetch_pending_items(1, wallet_id)
+            if not rows:
+                break
 
-        upd = []
-        for row in rows:
-            db_type = conn.DB_TYPE
-            if db_type.startswith("pgsql_mwst_"):
-                result = decrypt_item(
+            upd = []
+            for row in rows:
+                result = decrypt_item_mwst(
                     row, indy_key, b64=conn.DB_TYPE == "pgsql_mwst_profiles"
-                )  # update
-            else:
-                result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
-            pprint.pprint(result, indent=2)
-            upd.append(update_item(result, profile_key))
-        await conn.update_items(upd)
+                )  # update for separate stores
+                pprint.pprint(result, indent=2)
+                upd.append(update_item(result, profile_key))
+            await conn.update_items(upd, profile_id)
+
+        else:
+            rows = await conn.fetch_pending_items(1)
+            if not rows:
+                break
+
+            upd = []
+            for row in rows:
+                db_type = conn.DB_TYPE
+                if db_type.startswith("pgsql_mwst_"):
+                    result = decrypt_item(
+                        row, indy_key, b64=conn.DB_TYPE == "pgsql_mwst_profiles"
+                    )  # update
+                else:
+                    result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
+                pprint.pprint(result, indent=2)
+                upd.append(update_item(result, profile_key))
+            await conn.update_items(upd)
 
 
 async def post_upgrade(uri: str, wallet_pw: str):
