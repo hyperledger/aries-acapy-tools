@@ -690,7 +690,7 @@ async def upgrade(
             for wallet_id, indy_key in indy_key_dict.items():
                 print("indy key: ", indy_key)
                 profile_key, profile_id = await init_profile(
-                    conn, indy_key, base_wallet_name
+                    conn, indy_key, wallet_id
                 )
                 print(" ")
                 print("profile_id in upgrade: ", profile_id)
