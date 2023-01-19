@@ -128,14 +128,14 @@ async def test_migration_mwst_as_profiles(tmp_path):
     """
     Run the migration script with the db in the docker container.
     """
-    postgres_start_with_volume(tmp_path, "mwst")  # TODO: update mwst
+    postgres_start_with_volume(tmp_path, "mt-mwst")  # TODO: update mwst
     await migrate_pg_db(
         "wallets",
         "insecure",
         "mwst_as_profiles",
-        profile_store_name = "profile_store_name",   # TODO: update from placeholders
+        profile_store_name = "multitenant_sub_wallet",   # TODO: update from placeholders
         wallet_keys = "wallet_keys",
-        base_wallet_name = "base_wallet_name",
+        base_wallet_name = "agency",
         base_wallet_key = "base_wallet_key"
         )
 

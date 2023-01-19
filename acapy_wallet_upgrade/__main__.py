@@ -14,7 +14,10 @@ import re
 import pprint
 import sys
 import uuid
-from acapy_wallet_upgrade.pg_connection_mwst import PgConnectionMWST
+from acapy_wallet_upgrade.pg_connection_mwst_profiles import PgConnectionMWSTProfiles
+from acapy_wallet_upgrade.pg_connection_mwst_separate_stores import (
+    PgConnectionMWSTSeparateStores,
+)
 
 import base58
 import cbor2
@@ -39,7 +42,8 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
     print(f"fx fetch_indy_key(conn: DbConnection, key_pass: {key_pass})")
     print(" ")
 
-    if conn.DB_TYPE == "pgsql_mwst":
+    db_type = conn.DB_TYPE
+    if db_type.startswith("pgsql_mwst_"):
         metadata_row: list = await conn.fetch_multiple("SELECT value FROM metadata")
         print("metadata row: ", metadata_row)
         indy_keys_list = []
@@ -339,8 +343,11 @@ async def update_items(conn: DbConnection, indy_key: dict, profile_key: dict):
 
         upd = []
         for row in rows:
-            if conn.DB_TYPE == "pgsql_mwst":
-                result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql_mwst")
+            db_type = conn.DB_TYPE
+            if db_type.startswith("pgsql_mwst_"):
+                result = decrypt_item(
+                    row, indy_key, b64=conn.DB_TYPE == "pgsql_mwst_profiles"
+                )  # update
             else:
                 result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
             pprint.pprint(result, indent=2)
@@ -605,21 +612,21 @@ async def upgrade(
     wallet_keys: str = None,
     base_wallet_name: str = None,
     base_wallet_key: str = None,
-    ):
+):
     await conn.connect()
 
     try:
         await conn.pre_upgrade()
 
-        if conn.DB_TYPE == "pgsql_mwst":
+        db_type = conn.DB_TYPE
+        if db_type.startswith("pgsql_mwst_"):
             indy_key_list: list[dict] = await fetch_indy_key(conn, wallet_pw)
             print(" ")
             print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
-            print("indy_key!!!!")
             pprint.pprint(indy_key_list, indent=2)
             print(" ")
             for indy_key in indy_key_list:
-                print("indy key using here: ", indy_key)
+                print("indy key: ", indy_key)
                 profile_key = await init_profile(conn, indy_key)
                 print(" ")
                 print("fx upgrade(db, wallet_pw)")
@@ -649,7 +656,7 @@ async def upgrade(
         await conn.close()
     if conn.DB_TYPE == "sqlite":
         await post_upgrade(f"sqlite://{conn._path}", wallet_pw)
-    else:    # TODO: update for the 3 different postgres cases
+    else:  # TODO: update for the 3 different postgres cases
         await post_upgrade(conn._path, wallet_pw)
     print("done")
 
@@ -662,7 +669,7 @@ async def migration(
     wallet_keys: str = None,
     base_wallet_name: str = None,
     base_wallet_key: str = None,
-    ):
+):
     logging.basicConfig(level=logging.WARN)
 
     if mode == "sqlite":
@@ -672,10 +679,10 @@ async def migration(
         conn = PgConnection(db_path)
 
     elif mode == "mwst_as_profiles":
-        conn = PgConnectionMWST(db_path)
+        conn = PgConnectionMWSTProfiles(db_path)
 
     elif mode == "mwst_as_separate_stores":
-        conn = PgConnectionMWST(db_path)  # TODO: create new class?
+        conn = PgConnectionMWSTSeparateStores(db_path)
 
     else:
         raise UpgradeError(f"Invalid mode")
@@ -686,5 +693,5 @@ async def migration(
         profile_store_name,
         wallet_keys,
         base_wallet_name,
-        base_wallet_key
+        base_wallet_key,
     )
