@@ -1,5 +1,6 @@
 import base64
 import pprint
+import uuid
 
 from .pg_connection import PgConnection
 from .sql_commands import PostgresqlCommands as sql_commands
@@ -30,27 +31,35 @@ class PgConnectionMWSTProfiles(PgConnection):
                         base64.b64decode(bytes.decode(row[1]))
                     )
 
-    async def insert_profile(self, pass_key: str, name: str, key: bytes):
-        """Insert the initial profile."""
-        print("\nfx insert_profile(self, pass_key, name, key)")
+    async def retrieve_entries(self, sql: str, optional: bool = False):
+        """Retrieve entries from a table."""
+        print(f"\nfx retrieve_entries(self, sql: {sql}")
+        return await self._conn.fetch(sql)
+
+    async def create_config(self, pass_key: str, name: str = str(uuid.uuid4())):
         print("pass_key: ")
         pprint.pprint(pass_key, indent=2)
+
+        await self._conn.executemany(
+            sql_commands.insert_into_config,
+            (("default_profile", name), ("key", pass_key)),
+        )
+
+    async def insert_profile(self, name: str = str(uuid.uuid4()), key: bytes = None):
+        """Insert the initial profile."""
+        print("\nfx insert_profile(self, pass_key, name, key)")
         print("name: ")
         pprint.pprint(name, indent=2)
         print("key: ")
         pprint.pprint(key, indent=2)
         print(" ")
         async with self._conn.transaction():
-            await self._conn.executemany(
-                sql_commands.insert_into_config,
-                (("default_profile", name), ("key", pass_key)),
-            )
-
-            await self._conn.execute(
+            id = await self._conn.fetch(
                 sql_commands.insert_into_profiles,
                 name,
                 key,
             )
+            return id[0][0]
 
     async def add_profile(self, name, key):
         """Accommodate the insertion of multiple profiles

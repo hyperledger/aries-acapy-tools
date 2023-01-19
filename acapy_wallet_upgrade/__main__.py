@@ -129,53 +129,47 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
     return keys
 
 
-async def init_profile(conn: DbConnection, indy_key: dict) -> dict:
+async def create_config(conn: DbConnection, indy_key, base_wallet_name):
+    """Create the config table using the base wallet name and
+    pass_key.
+    """
+    pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
+    await conn.create_config(pass_key, base_wallet_name)
+
+
+async def init_profile(
+    conn: DbConnection, indy_key: dict, wallet_id: str = None
+) -> dict:
     print(" ")
     print("fx init_profile(conn: DbConnection, indy_key: dict)")
     print("indy_key: ")
     pprint.pprint(indy_key, indent=2)
 
-    profile_row = await conn.fetch_one(
-        "SELECT id, profile_key FROM profiles", optional=True
-    )
-    print("profile_row: ")
-    pprint.pprint(profile_row, indent=2)
+    profile_key = {
+        "ver": "1",
+        "ick": indy_key["type"],
+        "ink": indy_key["name"],
+        "ihk": indy_key["item_hmac"],
+        "tnk": indy_key["tag_name"],
+        "tvk": indy_key["tag_value"],
+        "thk": indy_key["tag_hmac"],
+    }
 
-    if profile_row:
-        print("before profile_key: ")
-        pprint.pprint(profile_row[1], indent=2)
+    print("profile_key: ")
+    pprint.pprint(profile_key, indent=2)
 
-        profile_key = cbor2.loads(profile_row[1])
-        print("after profile_key: ")
-        pprint.pprint(profile_key, indent=2)
-        print(" ")
+    enc_pk = encrypt_merged(cbor2.dumps(profile_key), indy_key["master"])
+    print("enc_pk: ")
+    pprint.pprint(enc_pk, indent=2)
+    print(" ")
 
+    if conn.DB_TYPE.startswith("pgsql_mwst_"):
+        id = await conn.insert_profile(wallet_id, enc_pk)
+        return profile_key, id
     else:
-        profile_key = {
-            "ver": "1",
-            "ick": indy_key["type"],
-            "ink": indy_key["name"],
-            "ihk": indy_key["item_hmac"],
-            "tnk": indy_key["tag_name"],
-            "tvk": indy_key["tag_value"],
-            "thk": indy_key["tag_hmac"],
-        }
-
-        print("profile_key: ")
-        pprint.pprint(profile_key, indent=2)
-
         pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
-        print("pass_key: ")
-        pprint.pprint(pass_key, indent=2)
-
-        enc_pk = encrypt_merged(cbor2.dumps(profile_key), indy_key["master"])
-        print("enc_pk: ")
-        pprint.pprint(enc_pk, indent=2)
-        print(" ")
-
         await conn.insert_profile(pass_key, str(uuid.uuid4()), enc_pk)
-
-    return profile_key
+        return profile_key
 
 
 def encrypt_merged(message: bytes, my_key: bytes, hmac_key: bytes = None) -> bytes:
@@ -275,6 +269,38 @@ def decrypt_item(row: tuple, keys: dict, b64: bool = False):
     print(" ")
 
     row_id, row_type, row_name, row_value, row_key, tags_enc, tags_plain = row
+    value_key = decrypt_merged(row_key, keys["value"])
+    value = decrypt_merged(row_value, value_key) if row_value else None
+    tags = [
+        (0, k, v)
+        for k, v in (
+            (
+                decrypt_tags(tags_enc, keys["tag_name"], keys["tag_value"])
+                if tags_enc
+                else ()
+            )
+        )
+    ]
+    for k, v in decrypt_tags(tags_plain, keys["tag_name"]) if tags_plain else ():
+        tags.append((1, k, v))
+    return {
+        "id": row_id,
+        "type": decrypt_merged(row_type, keys["type"], b64),
+        "name": decrypt_merged(row_name, keys["name"], b64),
+        "value": value,
+        "tags": tags,
+    }
+
+
+def decrypt_item_mwst(row: tuple, keys: dict, b64: bool = False):
+    print(" ")
+    print(f"fx decrypt_item(row: tuple, keys: dict, b64: bool = {b64})")
+    print("row: ")
+    pprint.pprint(row, indent=2)
+    pprint.pprint(f"keys: {keys}", indent=2)
+    print(" ")
+
+    _, row_id, row_type, row_name, row_value, row_key, tags_enc, tags_plain = row
     value_key = decrypt_merged(row_key, keys["value"])
     value = decrypt_merged(row_value, value_key) if row_value else None
     tags = [
@@ -622,22 +648,39 @@ async def upgrade(
     try:
         await conn.pre_upgrade()
 
-        db_type = conn.DB_TYPE
-        if db_type.startswith("pgsql_mwst_"):
-            indy_key_list: list[dict] = await fetch_indy_key(conn, wallet_pw)
+        if conn.DB_TYPE.startswith("pgsql_mwst_"):
+            indy_key_dict: dict = await fetch_indy_key(conn, wallet_pw)
             print(" ")
             print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
-            pprint.pprint(indy_key_list, indent=2)
+            pprint.pprint(indy_key_dict, indent=2)
             print(" ")
-            for indy_key in indy_key_list:
+
+            await create_config(conn, indy_key_dict[base_wallet_name], base_wallet_name)
+
+            profile_row = await conn.retrieve_entries(
+                "SELECT * FROM profiles", optional=True
+            )
+            print("profile row in upgrade(): ", profile_row)
+            if len(profile_row) > 0:
+                raise UpgradeError("Config table must be empty prior to migration.")
+            print("profile_row: ")
+            pprint.pprint(profile_row, indent=2)
+
+            for wallet_id, indy_key in indy_key_dict.items():
                 print("indy key: ", indy_key)
-                profile_key = await init_profile(conn, indy_key)
+                profile_key, profile_id = await init_profile(
+                    conn, indy_key, base_wallet_name
+                )
+                print(" ")
+                print("profile_id in upgrade: ", profile_id)
                 print(" ")
                 print("fx upgrade(db, wallet_pw)")
                 print("profile_key: ")
                 print(" ")
                 pprint.pprint(profile_key, indent=2)
-                await update_items(conn, indy_key, profile_key)
+                print("wallet_id# ", wallet_id)
+                print("profile_id# ", profile_id)
+                await update_items(conn, indy_key, profile_key, wallet_id, profile_id)
                 await conn.finish_upgrade()
                 print("Finished schema upgrade")
 
