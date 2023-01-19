@@ -42,15 +42,17 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
     print(f"fx fetch_indy_key(conn: DbConnection, key_pass: {key_pass})")
     print(" ")
 
-    db_type = conn.DB_TYPE
-    if db_type.startswith("pgsql_mwst_"):
-        metadata_row: list = await conn.fetch_multiple("SELECT value FROM metadata")
+    if conn.DB_TYPE.startswith("pgsql_mwst_"):
+        metadata_row: list = await conn.fetch_multiple(
+            "SELECT wallet_id, value FROM metadata"
+        )
         print("metadata row: ", metadata_row)
-        indy_keys_list = []
+        results_dict = {}
         print("keypass now: ", key_pass)
         key_pass = key_pass.encode("ascii")
         for metadata_json in metadata_row:
-            metadata = json.loads(metadata_json[0])
+            wallet_id = metadata_json[0]
+            metadata = json.loads(metadata_json[1])
             keys_enc = bytes(metadata["keys"])
             salt = bytes(metadata["master_key_salt"])
 
@@ -83,8 +85,10 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
             )
             keys["master"] = master_key
             keys["salt"] = salt
-            indy_keys_list.append(keys)
-        return indy_keys_list
+            results_dict[wallet_id] = keys
+
+        pprint.pprint(results_dict, indent=2)
+        return results_dict
 
     metadata_row = await conn.fetch_one("SELECT value FROM metadata")
     metadata_json = metadata_row[0]
