@@ -95,7 +95,7 @@ class PostgresqlCommands:
     insert_into_items = """
                         INSERT INTO items (profile_id, kind, category, name, value)
                         VALUES (1, 2, $1, $2, $3) RETURNING id
-                    """
+                    """ #TODO: update profile_id to be a parameter
     insert_into_items_tags = """
                             INSERT INTO items_tags (item_id, plaintext, name, value)
                             VALUES ($1, $2, $3, $4)

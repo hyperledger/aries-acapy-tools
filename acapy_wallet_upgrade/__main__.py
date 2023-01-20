@@ -658,12 +658,11 @@ def _credential_tags(cred_data: dict) -> dict:
 
 async def upgrade(
     conn: DbConnection,
-    wallet_pw: str,
     profile_store_name: str = None,
-    wallet_keys: str = None,
+    wallet_keys: dict = None,
     base_wallet_name: str = None,
-    base_wallet_key: str = None,
 ):
+    wallet_pw = wallet_keys.get(base_wallet_name)
     await conn.connect()
 
     try:
@@ -728,15 +727,14 @@ async def upgrade(
 
 async def migration(
     mode: str,
-    wallet_pw: str,
     db_path: str = None,
     profile_store_name: str = None,
-    wallet_keys: str = None,
-    base_wallet_name: str = None,
-    base_wallet_key: str = None,
+    wallet_keys: dict = {},
+    base_wallet_name: str = "agency",
 ):
     logging.basicConfig(level=logging.WARN)
-
+    # TODO: make base_wallet_name optional
+    # TODO: if base wallet name is empty default to wallet_keys key value
     if mode == "sqlite":
         conn = SqliteConnection(db_path)
 
@@ -750,13 +748,11 @@ async def migration(
         conn = PgConnectionMWSTSeparateStores(db_path)
 
     else:
-        raise UpgradeError(f"Invalid mode")
+        raise UpgradeError("Invalid mode")
 
     await upgrade(
         conn,
-        wallet_pw,
         profile_store_name,
         wallet_keys,
         base_wallet_name,
-        base_wallet_key,
     )

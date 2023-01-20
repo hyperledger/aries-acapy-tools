@@ -95,7 +95,7 @@ services:
         --tails-server-base-url http://tails:6543
         --wallet-type indy
         --wallet-name alice
-        --wallet-key insecure
+        --wallet-key alice_insecure0
         --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","max_connections":5}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
@@ -129,7 +129,7 @@ services:
         --tails-server-base-url http://tails:6543
         --wallet-type indy
         --wallet-name bob
-        --wallet-key insecure
+        --wallet-key bob_insecure0
         --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","max_connections":5}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
@@ -166,7 +166,7 @@ services:
         --tails-server-base-url http://tails:6543
         --wallet-type indy
         --wallet-name alice
-        --wallet-key insecure
+        --wallet-key alice_insecure1
         --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","wallet_scheme":"MultiWalletSingleTable"}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
@@ -200,7 +200,7 @@ services:
         --tails-server-base-url http://tails:6543
         --wallet-type indy
         --wallet-name bob
-        --wallet-key insecure
+        --wallet-key bob_insecure1
         --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","wallet_scheme":"MultiWalletSingleTable"}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
@@ -235,7 +235,7 @@ services:
         --tails-server-base-url http://tails:6543
         --wallet-type indy
         --wallet-name agency
-        --wallet-key insecure
+        --wallet-key angency_insecure0
         --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","wallet_scheme":"MultiWalletSingleTable"}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
