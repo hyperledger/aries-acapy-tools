@@ -105,8 +105,8 @@ async def test_migration_sqlite(tmp_path):
     await migration(
         "sqlite",
         db_path=dst_bob,
-        wallet_keys={"alice": "insecure"},
-        base_wallet_name="alice",
+        wallet_keys={"bob": "insecure"},
+        base_wallet_name="bob",
     )
 
 
