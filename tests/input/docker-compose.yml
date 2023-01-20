@@ -235,7 +235,7 @@ services:
         --tails-server-base-url http://tails:6543
         --wallet-type indy
         --wallet-name agency
-        --wallet-key angency_insecure0
+        --wallet-key agency_insecure0
         --wallet-storage-type postgres_storage
         --wallet-storage-config '{"url":"db:5432","wallet_scheme":"MultiWalletSingleTable"}'
         --wallet-storage-creds '{"account":"postgres","password":"mysecretpassword","admin_account":"postgres","admin_password":"mysecretpassword"}'
