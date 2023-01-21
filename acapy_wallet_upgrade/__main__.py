@@ -406,11 +406,11 @@ async def update_items(
             await conn.update_items(upd)
 
 
-async def post_upgrade(uri: str, wallet_pw: str):
+async def post_upgrade(uri: str, wallet_pw: str, profile: str = None):
     from aries_askar import Key, Store
 
     print("Opening wallet with Askar...")
-    store = await Store.open(uri, pass_key=wallet_pw)
+    store = await Store.open(uri, pass_key=wallet_pw, profile=profile)
 
     print("Updating keys...", end="")
     upd_count = 0
@@ -693,7 +693,7 @@ async def upgrade(
                 pprint.pprint(profile_key, indent=2)
                 await update_items(conn, indy_key, profile_key, wallet_id, profile_id)
                 await conn.finish_upgrade()
-                await post_upgrade(conn._path, wallet_pw)
+                await post_upgrade(conn._path, wallet_pw)  # TODO: pass in profile name
         finally:
             await conn.close()
             print("pgsql_mwst_profiles upgrade done")
