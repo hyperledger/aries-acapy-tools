@@ -20,17 +20,6 @@ class PgConnectionMWSTProfiles(PgConnection):
         self._path: str = path
         super().__init__(path)
 
-    async def retrieve_metadata_info(self) -> dict:
-        """Returns a list of wallet names and keys"""
-        if await self.find_table("metadata"):
-            stmt = await self._conn.fetch("SELECT wallet_id, value FROM metadata")
-            metadata_info = {}
-            if len(stmt) > 0:
-                for row in stmt:
-                    metadata_info[row[0]] = bytes.decode(
-                        base64.b64decode(bytes.decode(row[1]))
-                    )
-
     async def retrieve_entries(self, sql: str, optional: bool = False):
         """Retrieve entries from a table."""
         print(f"\nfx retrieve_entries(self, sql: {sql}")
@@ -60,16 +49,6 @@ class PgConnectionMWSTProfiles(PgConnection):
                 key,
             )
             return id[0][0]
-
-    async def add_profile(self, name, key):
-        """Accommodate the insertion of multiple profiles
-        all encrypted with the same store key.
-        """
-        await self._conn.execute(
-            """INSERT INTO profiles (name, profile_key) VALUES($1, $2)""",
-            name,
-            key,
-        )
 
     async def find_wallet_ids(self) -> set:
         """Retrieve set of wallet ids."""
