@@ -220,31 +220,6 @@ def decrypt_item(row: tuple, keys: dict, b64: bool = False):
     }
 
 
-def decrypt_item_mwst(row: tuple, keys: dict, b64: bool = False):
-    _, row_id, row_type, row_name, row_value, row_key, tags_enc, tags_plain = row
-    value_key = decrypt_merged(row_key, keys["value"])
-    value = decrypt_merged(row_value, value_key) if row_value else None
-    tags = [
-        (0, k, v)
-        for k, v in (
-            (
-                decrypt_tags(tags_enc, keys["tag_name"], keys["tag_value"])
-                if tags_enc
-                else ()
-            )
-        )
-    ]
-    for k, v in decrypt_tags(tags_plain, keys["tag_name"]) if tags_plain else ():
-        tags.append((1, k, v))
-    return {
-        "id": row_id,
-        "type": decrypt_merged(row_type, keys["type"], b64),
-        "name": decrypt_merged(row_name, keys["name"], b64),
-        "value": value,
-        "tags": tags,
-    }
-
-
 def update_item(item: dict, key: dict) -> dict:
     tags = []
     for plain, k, v in item["tags"]:
@@ -279,8 +254,8 @@ async def update_items(
 
             upd = []
             for row in rows:
-                result = decrypt_item_mwst(
-                    row, indy_key, b64=conn.DB_TYPE == "pgsql_mwst_profiles"
+                result = decrypt_item(
+                    row[1:], indy_key, b64=conn.DB_TYPE == "pgsql_mwst_profiles"
                 )  # update for separate stores
                 upd.append(update_item(result, profile_key))
             await conn.update_items(upd, profile_id)
