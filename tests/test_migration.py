@@ -106,7 +106,7 @@ def postgres_with_volume(tmp_path: Path, unused_tcp_port_factory: Callable[[], i
         port = unused_tcp_port_factory()
         container = client.containers.run(
             "postgres:11",
-            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
+            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw,z"}},
             ports={"5432/tcp": port},
             environment=["POSTGRES_PASSWORD=mysecretpassword"],
             auto_remove=True,
