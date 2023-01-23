@@ -1,34 +1,30 @@
 """Indy wallet upgrade."""
 
 
-import asyncio
 import base64
 import contextlib
-import json
 import hashlib
 import hmac
+import json
 import logging
 import os
 import re
-
-import pprint
-import sys
 import uuid
-from acapy_wallet_upgrade.pg_connection_mwst_profiles import PgConnectionMWSTProfiles
-from acapy_wallet_upgrade.pg_connection_mwst_separate_stores import (
-    PgConnectionMWSTSeparateStores,
-)
 
 import base58
 import cbor2
 import msgpack
 import nacl.pwhash
-from urllib.parse import urlparse
+
+from acapy_wallet_upgrade.pg_connection_mwst_profiles import PgConnectionMWSTProfiles
+from acapy_wallet_upgrade.pg_connection_mwst_separate_stores import (
+    PgConnectionMWSTSeparateStores,
+)
 
 from .db_connection import DbConnection
-from .sqlite_connection import SqliteConnection
-from .pg_connection import PgConnection
 from .error import UpgradeError
+from .pg_connection import PgConnection
+from .sqlite_connection import SqliteConnection
 
 
 CHACHAPOLY_KEY_LEN = 32
@@ -41,9 +37,7 @@ async def fetch_pgsql_mwst_keys(conn, wallet_id, key_pass):
     metadata_row: list = await conn.fetch_multiple(
         "SELECT wallet_id, value FROM metadata WHERE wallet_id = $1", (wallet_id)
     )
-    print("metadata row: ", metadata_row)
     results_dict = {}
-    print("keypass now: ", key_pass)
     key_pass = key_pass.encode("ascii")
     for metadata_json in metadata_row:
         wallet_id = metadata_json[0]
@@ -82,22 +76,16 @@ async def fetch_pgsql_mwst_keys(conn, wallet_id, key_pass):
         keys["salt"] = salt
         results_dict[wallet_id] = keys
 
-    pprint.pprint(results_dict, indent=2)
     return results_dict
 
 
 async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
-    print(" ")
-    print(f"fx fetch_indy_key(conn: DbConnection, key_pass: {key_pass})")
-    print(" ")
-
     metadata_row = await conn.fetch_one("SELECT value FROM metadata")
     metadata_json = metadata_row[0]
     metadata = json.loads(metadata_json)
     keys_enc = bytes(metadata["keys"])
     salt = bytes(metadata["master_key_salt"])
 
-    print("Deriving wallet key...")
     key_pass = key_pass.encode("ascii")
     salt = salt[:16]
     master_key = nacl.pwhash.argon2i.kdf(
@@ -108,7 +96,6 @@ async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
         nacl.pwhash.argon2i.MEMLIMIT_MODERATE,
     )
 
-    print("Opening wallet...")
     keys_mpk = decrypt_merged(keys_enc, master_key)
     keys_lst = msgpack.unpackb(keys_mpk)
     keys = dict(
@@ -141,11 +128,6 @@ async def create_config(conn: DbConnection, indy_key, base_wallet_name):
 async def init_profile(
     conn: DbConnection, indy_key: dict, wallet_id: str = None
 ) -> dict:
-    print(" ")
-    print("fx init_profile(conn: DbConnection, indy_key: dict)")
-    print("indy_key: ")
-    pprint.pprint(indy_key, indent=2)
-
     profile_key = {
         "ver": "1",
         "ick": indy_key["type"],
@@ -156,13 +138,7 @@ async def init_profile(
         "thk": indy_key["tag_hmac"],
     }
 
-    print("profile_key: ")
-    pprint.pprint(profile_key, indent=2)
-
     enc_pk = encrypt_merged(cbor2.dumps(profile_key), indy_key["master"])
-    print("enc_pk: ")
-    pprint.pprint(enc_pk, indent=2)
-    print(" ")
 
     if conn.DB_TYPE.startswith("pgsql_mwst_"):
         id = await conn.insert_profile(wallet_id, enc_pk)
@@ -174,16 +150,6 @@ async def init_profile(
 
 
 def encrypt_merged(message: bytes, my_key: bytes, hmac_key: bytes = None) -> bytes:
-    print(" ")
-    print("fx encrypt_merged(message: bytes, my_key: bytes, hmac_key: bytes = None)")
-    print("message: ")
-    pprint.pprint(message, indent=2)
-    print("my_key: ")
-    pprint.pprint(my_key, indent=2)
-    print("hmac_key: ")
-    pprint.pprint(hmac_key, indent=2)
-    print(" ")
-
     if hmac_key:
         nonce = hmac.HMAC(hmac_key, message, digestmod=hashlib.sha256).digest()[
             :CHACHAPOLY_NONCE_LEN
@@ -199,20 +165,6 @@ def encrypt_merged(message: bytes, my_key: bytes, hmac_key: bytes = None) -> byt
 
 
 def encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes) -> bytes:
-    print(" ")
-    print(
-        "fx encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes)"
-    )
-    print("category: ")
-    pprint.pprint(category, indent=2)
-    print("name: ")
-    pprint.pprint(name, indent=2)
-    print("value: ")
-    pprint.pprint(value, indent=2)
-    print("hmac_key: ")
-    pprint.pprint(hmac_key, indent=2)
-    print(" ")
-
     hasher = hmac.HMAC(hmac_key, digestmod=hashlib.sha256)
     hasher.update(len(category).to_bytes(4, "big"))
     hasher.update(category)
@@ -223,14 +175,6 @@ def encrypt_value(category: bytes, name: bytes, value: bytes, hmac_key: bytes) -
 
 
 def decrypt_merged(enc_value: bytes, key: bytes, b64: bool = False) -> bytes:
-    print(" ")
-    print(f"fx decrypt_merged(enc_value: bytes, key: bytes, b64: {b64})")
-    print("enc_value: ")
-    pprint.pprint(enc_value, indent=2)
-    print("key: ")
-    pprint.pprint(key, indent=2)
-    print(" ")
-
     if b64:
         enc_value = base64.b64decode(enc_value)
 
@@ -244,16 +188,6 @@ def decrypt_merged(enc_value: bytes, key: bytes, b64: bool = False) -> bytes:
 
 
 def decrypt_tags(tags: str, name_key: bytes, value_key: bytes = None):
-    print(" ")
-    print(f"fx decrypt_tags(tags: str, name_key: bytes, value_key: bytes = {bytes})")
-    print("tags: ")
-    pprint.pprint(tags, indent=2)
-    print("name_key: ")
-    pprint.pprint(name_key, indent=2)
-    print("value_key: ")
-    pprint.pprint(value_key, indent=2)
-    print(" ")
-
     for tag in tags.split(","):
         tag_name, tag_value = map(bytes.fromhex, tag.split(":"))
         name = decrypt_merged(tag_name, name_key)
@@ -262,13 +196,6 @@ def decrypt_tags(tags: str, name_key: bytes, value_key: bytes = None):
 
 
 def decrypt_item(row: tuple, keys: dict, b64: bool = False):
-    print(" ")
-    print(f"fx decrypt_item(row: tuple, keys: dict, b64: bool = {b64})")
-    print("row: ")
-    pprint.pprint(row, indent=2)
-    pprint.pprint(f"keys: {keys}", indent=2)
-    print(" ")
-
     row_id, row_type, row_name, row_value, row_key, tags_enc, tags_plain = row
     value_key = decrypt_merged(row_key, keys["value"])
     value = decrypt_merged(row_value, value_key) if row_value else None
@@ -294,13 +221,6 @@ def decrypt_item(row: tuple, keys: dict, b64: bool = False):
 
 
 def decrypt_item_mwst(row: tuple, keys: dict, b64: bool = False):
-    print(" ")
-    print(f"fx decrypt_item(row: tuple, keys: dict, b64: bool = {b64})")
-    print("row: ")
-    pprint.pprint(row, indent=2)
-    pprint.pprint(f"keys: {keys}", indent=2)
-    print(" ")
-
     _, row_id, row_type, row_name, row_value, row_key, tags_enc, tags_plain = row
     value_key = decrypt_merged(row_key, keys["value"])
     value = decrypt_merged(row_value, value_key) if row_value else None
@@ -326,23 +246,12 @@ def decrypt_item_mwst(row: tuple, keys: dict, b64: bool = False):
 
 
 def update_item(item: dict, key: dict) -> dict:
-    print(" ")
-    print("fx update_item(item: dict, key: dict)")
-    print("item: ")
-    pprint.pprint(item, indent=2)
-    print("key: ")
-    pprint.pprint(key, indent=2)
-    print(" ")
-
     tags = []
     for plain, k, v in item["tags"]:
         if not plain:
             v = encrypt_merged(v, key["tvk"], key["thk"])
         k = encrypt_merged(k, key["tnk"], key["thk"])
         tags.append((plain, k, v))
-
-    print(f"found type: {item['type']}")
-    print(f"found key: {key}")
 
     ret_val = {
         "id": item["id"],
@@ -351,9 +260,6 @@ def update_item(item: dict, key: dict) -> dict:
         "value": encrypt_value(item["type"], item["name"], item["value"], key["ihk"]),
         "tags": tags,
     }
-
-    print("ret_val: ")
-    pprint.pprint(ret_val, indent=2)
 
     return ret_val
 
@@ -365,14 +271,6 @@ async def update_items(
     wallet_id: str = None,
     profile_id: int = None,
 ):
-    print(" ")
-    print("fx update_items(conn: DbConnection, indy_key: dict, profile_key: dict)")
-    print("indy_key: ")
-    pprint.pprint(indy_key, indent=2)
-    print("profile_key: ")
-    pprint.pprint(profile_key, indent=2)
-    print(" ")
-
     while True:
         if conn.DB_TYPE.startswith("pgsql_mwst_"):
             rows = await conn.fetch_pending_items(1, wallet_id)
@@ -384,7 +282,6 @@ async def update_items(
                 result = decrypt_item_mwst(
                     row, indy_key, b64=conn.DB_TYPE == "pgsql_mwst_profiles"
                 )  # update for separate stores
-                pprint.pprint(result, indent=2)
                 upd.append(update_item(result, profile_key))
             await conn.update_items(upd, profile_id)
 
@@ -402,7 +299,6 @@ async def update_items(
                     )  # update
                 else:
                     result = decrypt_item(row, indy_key, b64=conn.DB_TYPE == "pgsql")
-                pprint.pprint(result, indent=2)
                 upd.append(update_item(result, profile_key))
             await conn.update_items(upd)
 
@@ -626,12 +522,6 @@ async def post_upgrade(uri: str, wallet_pw: str, profile: str = None):
 
 
 def _credential_tags(cred_data: dict) -> dict:
-    print(" ")
-    print("fx _credential_tags(cred_data: dict)")
-    print("cred_data: ")
-    pprint.pprint(cred_data, indent=2)
-    print(" ")
-
     schema_id = cred_data["schema_id"]
     schema_id_parts = re.match(r"^(\w+):2:([^:]+):([^:]+)$", schema_id)
     if not schema_id_parts:
@@ -670,31 +560,18 @@ async def upgrade_pgsql_mwst_profiles(conn, wallet_pw, base_wallet_name, wallet_
             indy_key_dict: dict = await fetch_pgsql_mwst_keys(
                 conn, wallet_name, wallet_pw
             )
-            print(f"\nfx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
-            pprint.pprint(indy_key_dict, indent=2)
-            print(" ")
-
             profile_row = await conn.retrieve_entries(
                 "SELECT * FROM profiles", optional=True
             )
-            print("profile row in upgrade(): ", profile_row)
             if len(profile_row) > 0:
                 raise UpgradeError("Config table must be empty prior to migration.")
-            print("profile_row: ")
-            pprint.pprint(profile_row, indent=2)
-
             for wallet_id, indy_key in indy_key_dict.items():
-                print("indy key: ", indy_key)
                 profile_key, profile_id = await init_profile(conn, indy_key, wallet_id)
-                print("profile_key: ")
-                print(" ")
-                pprint.pprint(profile_key, indent=2)
                 await update_items(conn, indy_key, profile_key, wallet_id, profile_id)
                 await conn.finish_upgrade()
                 await post_upgrade(conn._path, wallet_pw)  # TODO: pass in profile name
     finally:
         await conn.close()
-        print("pgsql_mwst_profiles upgrade done")
 
 
 async def upgrade(
@@ -715,27 +592,15 @@ async def upgrade(
         try:
             await conn.pre_upgrade()
             indy_key = await fetch_indy_key(conn, wallet_pw)
-            print(" ")
-            print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
-            print("indy_key")
-            pprint.pprint(indy_key, indent=2)
-            print(" ")
             profile_key = await init_profile(conn, indy_key)
-            print(" ")
-            print("fx upgrade(db, wallet_pw)")
-            print("profile_key: ")
-            print(" ")
-            pprint.pprint(profile_key, indent=2)
             await update_items(conn, indy_key, profile_key)
             await conn.finish_upgrade()
-            print("Finished schema upgrade")
         finally:
             await conn.close()
         if conn.DB_TYPE == "sqlite":
             await post_upgrade(f"sqlite://{conn._path}", wallet_pw)
         else:
             await post_upgrade(conn._path, wallet_pw)
-        print("done")
 
 
 async def migration(
