@@ -125,11 +125,11 @@ async def test_migration_mwst_as_profiles(tmp_path):
     """
     Run the migration script with the db in the docker container.
     """
-    postgres_start_with_volume(tmp_path, "mt-mwst")  # TODO: update mwst
+    postgres_start_with_volume(tmp_path, "mt-mwst")
     await migrate_pg_db(
         db_name="wallets",
         mode="mwst_as_profiles",
-        profile_store_name="multitenant_sub_wallet",  # TODO: update from placeholders
+        profile_store_name="multitenant_sub_wallet",
         wallet_keys={
             "agency": "agency_insecure0",
             "alice": "alice_insecure1",
@@ -145,4 +145,11 @@ async def test_migration_mwst_as_separate_stores(tmp_path):
     Run the migration script with the db in the docker container.
     """
     postgres_start_with_volume(tmp_path, "mwst")  # TODO: update mwst
-    #await migrate_pg_db("wallets", "insecure", "mwst_as_separate_stores")
+    await migrate_pg_db(
+        db_name="wallets",
+        mode="mwst_as_separate_stores",
+        wallet_keys={
+            "alice": "alice_insecure1",
+            "bob": "bob_insecure1",
+        },
+    )

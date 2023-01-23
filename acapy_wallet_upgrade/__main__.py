@@ -408,11 +408,11 @@ async def update_items(
             await conn.update_items(upd)
 
 
-async def post_upgrade(uri: str, wallet_pw: str):
+async def post_upgrade(uri: str, wallet_pw: str, profile: str = None):
     from aries_askar import Key, Store
 
     print("Opening wallet with Askar...")
-    store = await Store.open(uri, pass_key=wallet_pw)
+    store = await Store.open(uri, pass_key=wallet_pw, profile=profile)
 
     print("Updating keys...", end="")
     upd_count = 0
@@ -667,10 +667,9 @@ async def upgrade(
     wallet_pw = wallet_keys.get(base_wallet_name)
     await conn.connect()
 
-    try:
-        await conn.pre_upgrade()
-
-        if conn.DB_TYPE.startswith("pgsql_mwst_"):
+    if conn.DB_TYPE == "pgsql_mwst_profiles":
+        try:
+            await conn.pre_upgrade()
             indy_key_dict: dict = await fetch_indy_key(conn, wallet_pw)
             print(" ")
             print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
@@ -691,18 +690,19 @@ async def upgrade(
             for wallet_id, indy_key in indy_key_dict.items():
                 print("indy key: ", indy_key)
                 profile_key, profile_id = await init_profile(conn, indy_key, wallet_id)
-                print(" ")
-                print("profile_id in upgrade: ", profile_id)
-                print(" ")
-                print("fx upgrade(db, wallet_pw)")
                 print("profile_key: ")
                 print(" ")
                 pprint.pprint(profile_key, indent=2)
                 await update_items(conn, indy_key, profile_key, wallet_id, profile_id)
-            await conn.finish_upgrade()
-            print("Finished schema upgrade")
+                await conn.finish_upgrade()
+                await post_upgrade(conn._path, wallet_pw)  # TODO: pass in profile name
+        finally:
+            await conn.close()
+            print("pgsql_mwst_profiles upgrade done")
 
-        else:
+    else:
+        try:
+            await conn.pre_upgrade()
             indy_key = await fetch_indy_key(conn, wallet_pw)
             print(" ")
             print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
@@ -718,13 +718,13 @@ async def upgrade(
             await update_items(conn, indy_key, profile_key)
             await conn.finish_upgrade()
             print("Finished schema upgrade")
-    finally:
-        await conn.close()
-    if conn.DB_TYPE == "sqlite":
-        await post_upgrade(f"sqlite://{conn._path}", wallet_pw)
-    else:  # TODO: update for the 3 different postgres cases
-        await post_upgrade(conn._path, wallet_pw)
-    print("done")
+        finally:
+            await conn.close()
+        if conn.DB_TYPE == "sqlite":
+            await post_upgrade(f"sqlite://{conn._path}", wallet_pw)
+        else:
+            await post_upgrade(conn._path, wallet_pw)
+        print("done")
 
 
 async def migration(
