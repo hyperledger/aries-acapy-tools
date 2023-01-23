@@ -69,7 +69,21 @@ class PgConnectionMWSTProfiles(PgConnection):
         else:
             raise Exception("Row not found")
 
-    async def fetch_pending_items(self, limit: int, wallet_id: str):
+    async def fetch_pending_items(self, limit: int):
+        """Fetch un-updated items by wallet_id."""
+        raise NotImplementedError("Not implemented; use ProfileConnection.")
+
+    async def update_items(self, items):
+        """Update items in the database."""
+        raise NotImplementedError("Not implemented; use ProfileConnection.")
+
+
+class ProfileConnection(PgConnectionMWSTProfiles):
+    def __init__(self, wallet_id: str, profile_id: int):
+        self._wallet_id = wallet_id
+        self._profile_id = profile_id
+
+    async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items by wallet_id."""
         return await self._conn.fetch(
             """
@@ -81,10 +95,10 @@ class PgConnectionMWSTProfiles(PgConnection):
             FROM items_old i WHERE i.wallet_id = $2 LIMIT $1;
             """,  # noqa
             limit,
-            wallet_id,
+            self._wallet_id,
         )
 
-    async def update_items(self, items, profile_id: int = 1):
+    async def update_items(self, items):
         """Update items in the database."""
         del_ids = []
         for item in items:
@@ -95,7 +109,7 @@ class PgConnectionMWSTProfiles(PgConnection):
                         INSERT INTO items (profile_id, kind, category, name, value)
                         VALUES ($1, 2, $2, $3, $4) RETURNING id
                     """,
-                    profile_id,
+                    self._profile_id,
                     item["category"],
                     item["name"],
                     item["value"],

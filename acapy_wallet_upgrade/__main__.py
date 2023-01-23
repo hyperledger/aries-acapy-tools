@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+from typing import Dict
 import uuid
 
 import base58
@@ -21,7 +22,7 @@ from acapy_wallet_upgrade.pg_connection_mwst_separate_stores import (
     PgConnectionMWSTSeparateStores,
 )
 
-from .db_connection import DbConnection
+from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
 from .pg_connection import PgConnection
 from .sqlite_connection import SqliteConnection
@@ -35,7 +36,7 @@ ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_L
 
 async def fetch_pgsql_mwst_keys(conn, wallet_id, key_pass):
     metadata_row: list = await conn.fetch_multiple(
-        "SELECT wallet_id, value FROM metadata WHERE wallet_id = $1", (wallet_id)
+        "SELECT value FROM metadata WHERE wallet_id = $1", (wallet_id)
     )
     results_dict = {}
     key_pass = key_pass.encode("ascii")
@@ -79,18 +80,16 @@ async def fetch_pgsql_mwst_keys(conn, wallet_id, key_pass):
     return results_dict
 
 
-async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
-    metadata_row = await conn.fetch_one("SELECT value FROM metadata")
-    metadata_json = metadata_row[0]
+async def fetch_indy_key(wallet: Wallet, key_pass: str) -> dict:
+    metadata_json = await wallet.get_metadata()
     metadata = json.loads(metadata_json)
     keys_enc = bytes(metadata["keys"])
     salt = bytes(metadata["master_key_salt"])
 
-    key_pass = key_pass.encode("ascii")
     salt = salt[:16]
     master_key = nacl.pwhash.argon2i.kdf(
         CHACHAPOLY_KEY_LEN,
-        key_pass,
+        key_pass.encode("ascii"),
         salt,
         nacl.pwhash.argon2i.OPSLIMIT_MODERATE,
         nacl.pwhash.argon2i.MEMLIMIT_MODERATE,
@@ -551,11 +550,51 @@ async def upgrade_pgsql_mwst_profiles(conn, wallet_pw, base_wallet_name, wallet_
 
 async def upgrade(
     conn: DbConnection,
+    base_wallet_name: str,
+    wallet_keys: Dict[str, str],
     profile_store_name: str = None,
-    wallet_keys: dict = None,
-    base_wallet_name: str = None,
 ):
+    """Upgrade and Indy SDK wallet to Aries Askar.
+
+    Strategy for simple case, one database == one wallet:
+
+    1. Fetch Indy key
+    2. Create config table
+    3. Initialize profile
+    4. Update items
+    6. Transform Indy items to Askar items
+    5. Remove old tables
+
+    Strategy for multi-wallet single table as profiles:
+
+    1. User provides a mapping of wallet names and passwords
+    2. User provides base wallet name and password
+    3. Create config table using base wallet info to fill in default profile
+    4. For every mapping:
+        1. Fetch Indy Key
+        2. Create a profile
+        3. Update items
+        4. Transform Indy items to Askar items
+    4. Remove old tables
+
+    Strategy for multi-wallet single table as separate stores:
+
+    1. User provides a mapping of wallet names and passwords
+    2. For every mapping:
+        1. Create a new Askar Store DB
+        2. Connect to DB
+        3. Fetch Indy key from original DB
+        4. Create config table
+        5. Initialize profile
+        6. Retrieve items from old DB
+        7. Update items, insert into new DB
+        8. Transform Indy items to Askar items
+    7. Remove old tables
+    """
     wallet_pw = wallet_keys.get(base_wallet_name)
+    if not wallet_pw:
+        raise ValueError("Base wallet passphrase not found")
+
     await conn.connect()
 
     if conn.DB_TYPE == "pgsql_mwst_profiles":
@@ -563,19 +602,25 @@ async def upgrade(
             conn, wallet_pw, base_wallet_name, wallet_keys
         )
 
+    if isinstance(conn, SqliteConnection):
+        wallet = conn
+    elif isinstance(conn, PgConnection):
+        wallet = conn
     else:
-        try:
-            await conn.pre_upgrade()
-            indy_key = await fetch_indy_key(conn, wallet_pw)
-            profile_key = await init_profile(conn, indy_key)
-            await update_items(conn, indy_key, profile_key)
-            await conn.finish_upgrade()
-        finally:
-            await conn.close()
-        if conn.DB_TYPE == "sqlite":
-            await post_upgrade(f"sqlite://{conn._path}", wallet_pw)
-        else:
-            await post_upgrade(conn._path, wallet_pw)
+        raise ValueError("Unknown database type")
+
+    try:
+        await conn.pre_upgrade()
+        indy_key = await fetch_indy_key(wallet, wallet_pw)
+        profile_key = await init_profile(conn, indy_key)
+        await update_items(conn, indy_key, profile_key)
+        await conn.finish_upgrade()
+    finally:
+        await conn.close()
+    if conn.DB_TYPE == "sqlite":
+        await post_upgrade(f"sqlite://{conn._path}", wallet_pw)
+    else:
+        await post_upgrade(conn._path, wallet_pw)
 
 
 async def migration(

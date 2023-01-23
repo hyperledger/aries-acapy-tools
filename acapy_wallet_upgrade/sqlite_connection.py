@@ -1,10 +1,10 @@
 import aiosqlite
 
-from .db_connection import DbConnection
+from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
 
 
-class SqliteConnection(DbConnection):
+class SqliteConnection(DbConnection, Wallet):
     """Sqlite connection."""
 
     DB_TYPE = "sqlite"
@@ -97,7 +97,7 @@ class SqliteConnection(DbConnection):
         )
         return {}
 
-    async def insert_profile(self, pass_key: str, name: str, key: bytes):
+    async def create_config(self, pass_key: str, name: str):
         """Insert the initial profile."""
         await self._conn.executemany(
             "INSERT INTO config (name, value) VALUES (?1, ?2)",
@@ -105,9 +105,6 @@ class SqliteConnection(DbConnection):
                 ("default_profile", name),
                 ("key", pass_key),
             ),
-        )
-        await self._conn.execute(
-            "INSERT INTO profiles (name, profile_key) VALUES (?1, ?2)", (name, key)
         )
         await self._conn.commit()
 
@@ -125,17 +122,28 @@ class SqliteConnection(DbConnection):
         """
         )
 
-    async def fetch_one(self, sql: str, optional: bool = False):
-        """Fetch a single row from the database."""
-        stmt = await self._conn.execute(sql)
+    async def close(self):
+        """Release the connection."""
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
+
+    async def insert_profile(self, name: str, key: bytes):
+        """Insert the initial profile."""
+        await self._conn.execute(
+            "INSERT INTO profiles (name, profile_key) VALUES (?1, ?2)", (name, key)
+        )
+        await self._conn.commit()
+
+    async def get_metadata(self):
+        stmt = await self._conn.execute("SELECT value FROM metadata")
         found = None
         async for row in stmt:
             if found is None:
-                found = row
+                found = row[0]
             else:
                 raise Exception("Found duplicate row")
-        if not optional and not found:
-            raise Exception("Row not found")
+
         return found
 
     async def fetch_pending_items(self, limit: int):
@@ -176,9 +184,3 @@ class SqliteConnection(DbConnection):
                 )
         await self._conn.execute("DELETE FROM items_old WHERE id IN (?1)", (del_ids,))
         await self._conn.commit()
-
-    async def close(self):
-        """Release the connection."""
-        if self._conn:
-            await self._conn.close()
-            self._conn = None

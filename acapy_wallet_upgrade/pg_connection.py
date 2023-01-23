@@ -3,11 +3,11 @@ from urllib.parse import urlparse
 
 import asyncpg
 
-from .db_connection import DbConnection
+from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
 
 
-class PgConnection(DbConnection):
+class PgConnection(DbConnection, Wallet):
     """Postgres connection."""
 
     DB_TYPE = "pgsql"
@@ -138,7 +138,7 @@ class PgConnection(DbConnection):
 
         return {}
 
-    async def insert_profile(self, pass_key: str, name: str, key: bytes):
+    async def create_config(self, pass_key: str, name: str):
         """Insert the initial profile."""
         async with self._conn.transaction():
             await self._conn.executemany(
@@ -146,15 +146,6 @@ class PgConnection(DbConnection):
                     INSERT INTO config (name, value) VALUES($1, $2)
                 """,
                 (("default_profile", name), ("key", pass_key)),
-            )
-
-            await self._conn.execute(
-                """
-                    INSERT INTO profiles (name, profile_key) VALUES($1, $2)
-                    ON CONFLICT DO NOTHING RETURNING id
-                """,
-                name,
-                key,
             )
 
     async def finish_upgrade(self):
@@ -172,21 +163,36 @@ class PgConnection(DbConnection):
             """
         )
 
-    async def fetch_one(self, sql: str, optional: bool = False):
-        """Fetch a single row from the database."""
+    async def close(self):
+        """Release the connection."""
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
 
-        stmt: str = await self._conn.fetch(sql)
+    async def insert_profile(self, name: str, key: bytes):
+        """Insert the initial profile."""
+        async with self._conn.transaction():
+
+            await self._conn.execute(
+                """
+                    INSERT INTO profiles (name, profile_key) VALUES($1, $2)
+                    ON CONFLICT DO NOTHING RETURNING id
+                """,
+                name,
+                key,
+            )
+
+    async def get_metadata(self):
+        stmt = await self._conn.fetch("SELECT value FROM metadata")
         found = None
         if stmt != "":
             for row in stmt:
-                decoded = (base64.b64decode(bytes.decode(row[0])),)
+                decoded = base64.b64decode(bytes.decode(row[0]))
                 if found is None:
                     found = decoded
                 else:
                     raise Exception("Found duplicate row")
 
-        if optional or found:
-            return found
         else:
             raise Exception("Row not found")
 
@@ -204,12 +210,6 @@ class PgConnection(DbConnection):
             limit,
         )
         return stmt
-
-    async def close(self):
-        """Release the connection."""
-        if self._conn:
-            await self._conn.close()
-            self._conn = None
 
     async def update_items(self, items):
         """Update items in the database."""
