@@ -1,12 +1,10 @@
-import asyncpg
 import base64
-import pprint
-
 from urllib.parse import urlparse
+
+import asyncpg
 
 from .db_connection import DbConnection
 from .error import UpgradeError
-from .sql_commands import PostgresqlCommands as sql_commands
 
 
 class PgConnection(DbConnection):
@@ -37,12 +35,16 @@ class PgConnection(DbConnection):
 
     async def find_table(self, name: str) -> bool:
         """Check for existence of a table."""
-        print(f"\nfx find_table(self, name: {name})")
-
-        found = await self._conn.fetch(sql_commands.find_table, name)
-
-        print(f"found: {found[0][0]}\n")
-
+        found = await self._conn.fetch(
+            """
+            SELECT EXISTS (
+               SELECT FROM information_schema.tables
+               WHERE  table_schema = 'public'
+               AND    table_name   = $1
+            );
+            """,
+            name,
+        )
         return found[0][0]
 
     async def _create_table(self, table, cmd):
@@ -52,13 +54,15 @@ class PgConnection(DbConnection):
 
     async def pre_upgrade(self) -> dict:
         """Add new tables and columns."""
-        print("\nfx pre_upgrade(self)\n")
-
         if not await self.find_table("metadata"):
             raise UpgradeError("No metadata table found: not an Indy wallet database")
 
         if await self.find_table("config"):
-            stmt = await self._conn.fetch(sql_commands.config_names)
+            stmt = await self._conn.fetch(
+                """
+                SELECT name, value FROM config
+                """
+            )
             config = {}
             if len(stmt) > 0:
                 for row in stmt:
@@ -66,45 +70,110 @@ class PgConnection(DbConnection):
             return config
         else:
             async with self._conn.transaction():
-                await self._conn.execute(sql_commands.create_config)
+                await self._conn.execute(
+                    """
+                    CREATE TABLE config (
+                        name TEXT NOT NULL,
+                        value TEXT,
+                        PRIMARY KEY (name)
+                    );
+                    """
+                )
 
-        await self._create_table("profiles", sql_commands.create_profiles)
-        await self._create_table("items_old", sql_commands.create_items)
-        await self._create_table("items_tags", sql_commands.create_items_tags)
+        await self._create_table(
+            "profiles",
+            """
+            CREATE TABLE profiles (
+                id BIGSERIAL,
+                name TEXT NOT NULL,
+                reference TEXT NULL,
+                profile_key BYTEA NULL,
+                PRIMARY KEY (id)
+            );
+            CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
+            """,
+        )
+        await self._create_table(
+            "items_old",
+            """
+            ALTER TABLE items RENAME TO items_old;
+            CREATE TABLE items (
+                id BIGSERIAL,
+                profile_id BIGINT NOT NULL,
+                kind SMALLINT NOT NULL,
+                category BYTEA NOT NULL,
+                name BYTEA NOT NULL,
+                value BYTEA NOT NULL,
+                expiry TIMESTAMP NULL,
+                PRIMARY KEY(id),
+                FOREIGN KEY (profile_id) REFERENCES profiles (id)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE UNIQUE INDEX ix_items_uniq ON items
+                (profile_id, kind, category, name);
+            """,
+        )
+        await self._create_table(
+            "items_tags",
+            """
+            CREATE TABLE items_tags (
+                id BIGSERIAL,
+                item_id BIGINT NOT NULL,
+                name BYTEA NOT NULL,
+                value BYTEA NOT NULL,
+                plaintext SMALLINT NOT NULL,
+                PRIMARY KEY (id),
+                FOREIGN KEY (item_id) REFERENCES items (id)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE INDEX ix_items_tags_item_id ON items_tags(item_id);
+            CREATE INDEX ix_items_tags_name_enc
+                ON items_tags(name, SUBSTR(value, 1, 12)) include (item_id)
+                WHERE plaintext=0;
+            CREATE INDEX ix_items_tags_name_plain
+                ON items_tags(name, value) include (item_id)
+                WHERE plaintext=1;
+            """,
+        )
 
         return {}
 
     async def insert_profile(self, pass_key: str, name: str, key: bytes):
         """Insert the initial profile."""
-        print("\nfx insert_profile(self, pass_key, name, key)")
-        print("pass_key: ")
-        pprint.pprint(pass_key, indent=2)
-        print("name: ")
-        pprint.pprint(name, indent=2)
-        print("key: ")
-        pprint.pprint(key, indent=2)
-        print(" ")
         async with self._conn.transaction():
             await self._conn.executemany(
-                sql_commands.insert_into_config,
+                """
+                    INSERT INTO config (name, value) VALUES($1, $2)
+                """,
                 (("default_profile", name), ("key", pass_key)),
             )
 
             await self._conn.execute(
-                sql_commands.insert_into_profiles,
+                """
+                    INSERT INTO profiles (name, profile_key) VALUES($1, $2)
+                    ON CONFLICT DO NOTHING RETURNING id
+                """,
                 name,
                 key,
             )
 
     async def finish_upgrade(self):
         """Complete the upgrade."""
-        print("\nfx finish_upgrade(self)\n")
 
-        await self._conn.execute(sql_commands.drop_tables)
+        await self._conn.execute(
+            """
+            BEGIN TRANSACTION;
+            DROP TABLE items_old CASCADE;
+            DROP TABLE metadata;
+            DROP TABLE tags_encrypted;
+            DROP TABLE tags_plaintext;
+            INSERT INTO config (name, value) VALUES ('version', 1);
+            COMMIT;
+            """
+        )
 
     async def fetch_one(self, sql: str, optional: bool = False):
         """Fetch a single row from the database."""
-        print(f"\nfx fetch_one(self, sql: {sql}, optional: {optional})")
 
         stmt: str = await self._conn.fetch(sql)
         found = None
@@ -117,22 +186,23 @@ class PgConnection(DbConnection):
                     raise Exception("Found duplicate row")
 
         if optional or found:
-            print("found: ")
-            pprint.pprint(found, indent=2)
-            print(" ")
             return found
         else:
             raise Exception("Row not found")
 
     async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items."""
-        print(" ")
-        print(f"fx fetch_pending_items(self, limit: {limit})")
-
-        stmt = await self._conn.fetch(sql_commands.pending_items, limit)
-
-        print("stmt: ")
-        print(" ")
+        stmt = await self._conn.fetch(
+            """
+            SELECT i.id, i.type, i.name, i.value, i.key,
+            (SELECT string_agg(encode(te.name::bytea, 'hex') || ':' || encode(te.value::bytea, 'hex')::text, ',')
+                FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
+            (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
+                FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
+            FROM items_old i LIMIT $1;
+            """,  # noqa
+            limit,
+        )
         return stmt
 
     async def close(self):
@@ -143,24 +213,28 @@ class PgConnection(DbConnection):
 
     async def update_items(self, items):
         """Update items in the database."""
-        print("\nfx update_items(self, items)")
-        print("items: ")
-        pprint.pprint(items, indent=2)
         del_ids = []
         for item in items:
             del_ids = item["id"]
             async with self._conn.transaction():
                 ins = await self._conn.fetch(
-                    sql_commands.insert_into_items,
+                    """
+                        INSERT INTO items (profile_id, kind, category, name, value)
+                        VALUES (1, 2, $1, $2, $3) RETURNING id
+                    """,  # TODO update profile_id to be a parameter
                     item["category"],
                     item["name"],
                     item["value"],
                 )
                 item_id = ins[0][0]
-                print(f"item_id: {item_id}")
                 if item["tags"]:
                     await self._conn.executemany(
-                        sql_commands.insert_into_items_tags,
+                        """
+                            INSERT INTO items_tags (item_id, plaintext, name, value)
+                            VALUES ($1, $2, $3, $4)
+                        """,
                         ((item_id, *tag) for tag in item["tags"]),
                     )
-                await self._conn.execute(sql_commands.delete_item_in_items_old, del_ids)
+                await self._conn.execute(
+                    "DELETE FROM items_old WHERE id IN ($1)", del_ids
+                )

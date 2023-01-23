@@ -1,9 +1,7 @@
 import base64
-import pprint
 import uuid
 
 from .pg_connection import PgConnection
-from .sql_commands import PostgresqlCommands as sql_commands
 
 
 class PgConnectionMWSTProfiles(PgConnection):
@@ -22,29 +20,24 @@ class PgConnectionMWSTProfiles(PgConnection):
 
     async def retrieve_entries(self, sql: str, optional: bool = False):
         """Retrieve entries from a table."""
-        print(f"\nfx retrieve_entries(self, sql: {sql}")
         return await self._conn.fetch(sql)
 
     async def create_config(self, pass_key: str, name: str = str(uuid.uuid4())):
-        print("pass_key: ")
-        pprint.pprint(pass_key, indent=2)
-
         await self._conn.executemany(
-            sql_commands.insert_into_config,
+            """
+                INSERT INTO config (name, value) VALUES($1, $2)
+            """,
             (("default_profile", name), ("key", pass_key)),
         )
 
     async def insert_profile(self, name: str = str(uuid.uuid4()), key: bytes = None):
         """Insert the initial profile."""
-        print("\nfx insert_profile(self, pass_key, name, key)")
-        print("name: ")
-        pprint.pprint(name, indent=2)
-        print("key: ")
-        pprint.pprint(key, indent=2)
-        print(" ")
         async with self._conn.transaction():
             id = await self._conn.fetch(
-                sql_commands.insert_into_profiles,
+                """
+                    INSERT INTO profiles (name, profile_key) VALUES($1, $2)
+                    ON CONFLICT DO NOTHING RETURNING id
+                """,
                 name,
                 key,
             )
@@ -61,9 +54,6 @@ class PgConnectionMWSTProfiles(PgConnection):
 
     async def fetch_multiple(self, sql: str, args, optional: bool = False):
         """Fetch a single row from the database."""
-        print(" ")
-        print(f"fx fetch_one(self, sql: {sql}, optional: {optional})")
-
         stmt: str = await self._conn.fetch(sql, args)
         fetched = []
         if len(stmt) > 0:
@@ -75,27 +65,27 @@ class PgConnectionMWSTProfiles(PgConnection):
                 )
 
         if len(fetched) > 0:
-            print("fetched: ")
-            pprint.pprint(fetched, indent=2)
-            print(" ")
             return fetched
         else:
             raise Exception("Row not found")
 
     async def fetch_pending_items(self, limit: int, wallet_id: str):
         """Fetch un-updated items by wallet_id."""
-        print(" ")
-        print(f"fx fetch_pending_items(self, limit: {limit}, wallet_id: {wallet_id}")
         return await self._conn.fetch(
-            sql_commands.pending_items_by_wallet_id, limit, wallet_id
+            """
+            SELECT i.wallet_id, i.id, i.type, i.name, i.value, i.key,
+            (SELECT string_agg(encode(te.name::bytea, 'hex') || ':' || encode(te.value::bytea, 'hex')::text, ',')
+                FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
+            (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
+                FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
+            FROM items_old i WHERE i.wallet_id = $2 LIMIT $1;
+            """,  # noqa
+            limit,
+            wallet_id,
         )
 
     async def update_items(self, items, profile_id: int = 1):
         """Update items in the database."""
-        print(" ")
-        print("fx update_items(self, items)")
-        print("items: ")
-        pprint.pprint(items, indent=2)
         del_ids = []
         for item in items:
             del_ids = item["id"]
@@ -111,7 +101,6 @@ class PgConnectionMWSTProfiles(PgConnection):
                     item["value"],
                 )
                 item_id = ins[0][0]
-                print(f"item_id: {item_id}")
                 if item["tags"]:
                     await self._conn.executemany(
                         """
