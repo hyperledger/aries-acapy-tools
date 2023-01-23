@@ -556,7 +556,7 @@ async def upgrade_pgsql_mwst_profiles(conn, wallet_pw, base_wallet_name, wallet_
         )
         await create_config(conn, indy_key_dict[base_wallet_name], base_wallet_name)
 
-        for wallet_name, wallet_pw in wallet_keys:
+        for wallet_name, wallet_pw in wallet_keys.items():
             indy_key_dict: dict = await fetch_pgsql_mwst_keys(
                 conn, wallet_name, wallet_pw
             )

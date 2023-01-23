@@ -5,6 +5,7 @@ import time
 
 import pytest
 import docker
+from docker.errors import NotFound
 
 from acapy_wallet_upgrade.__main__ import migration
 
@@ -13,7 +14,7 @@ def docker_stop(client):
     """Stop indy-demo-postgres container."""
     try:
         container = client.containers.get("indy-demo-postgres")
-    except docker.errors.NotFound:
+    except NotFound:
         pass
     else:
         container.stop()
@@ -21,7 +22,7 @@ def docker_stop(client):
 
 def copy_db_into_temp(tmp_path, bd_src):
     """Copy database into temp directory."""
-    src = Path(f"input/{bd_src}")
+    src = Path(__file__).parent / "input" / bd_src
     d = tmp_path / "sub"
     d.mkdir()
     dst = d / bd_src
@@ -60,16 +61,14 @@ async def migrate_pg_db(
     db_port = 5432
     user_name = "postgres"
     db_user_password = "mysecretpassword"
-    """
-    postgres[ql]://[username[:password]@][host[:port],]/database[?parameter_list]
-    \_____________/\____________________/\____________/\_______/\_______________/
-        |                   |                  |          |            |
-        |- schema           |- userspec        |          |            |- parameter list
-                                               |          |
-                                               |          |- database name
-                                               |
-                                               |- hostspec
-    """
+    # postgres[ql]://[username[:password]@][host[:port],]/database[?parameter_list]
+    # \_____________/\____________________/\____________/\_______/\_______________/
+    #     |                   |                  |          |            |
+    #     |- schema           |- userspec        |          |            |- parameter list
+    #                                            |          |
+    #                                            |          |- database name
+    #                                            |
+    #                                            |- hostspec
     await migration(
         mode,
         f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
@@ -88,7 +87,7 @@ async def test_migration_sqlite(tmp_path):
     d.mkdir()
 
     # Alice
-    src_alice = Path("input/alice.db")
+    src_alice = Path(__file__).parent / "input" / "alice.db"
     dst_alice = d / "alice.db"
     shutil.copyfile(src_alice, dst_alice)
     await migration(
@@ -99,7 +98,7 @@ async def test_migration_sqlite(tmp_path):
     )
 
     # Bob
-    src_bob = Path("input/bob.db")
+    src_bob = Path(__file__).parent / "input" / "bob.db"
     dst_bob = d / "bob.db"
     shutil.copyfile(src_bob, dst_bob)
     await migration(
@@ -139,17 +138,17 @@ async def test_migration_mwst_as_profiles(tmp_path):
     )
 
 
-'''@pytest.mark.asyncio
-async def test_migration_mwst_as_separate_stores(tmp_path):
-    """
-    Run the migration script with the db in the docker container.
-    """
-    postgres_start_with_volume(tmp_path, "mwst")  # TODO: update mwst
-    await migrate_pg_db(
-        db_name="wallets",
-        mode="mwst_as_separate_stores",
-        wallet_keys={
-            "alice": "alice_insecure1",
-            "bob": "bob_insecure1",
-        },
-    )'''
+# @pytest.mark.asyncio
+# async def test_migration_mwst_as_separate_stores(tmp_path):
+#     """
+#     Run the migration script with the db in the docker container.
+#     """
+#     postgres_start_with_volume(tmp_path, "mwst")  # TODO: update mwst
+#     await migrate_pg_db(
+#         db_name="wallets",
+#         mode="mwst_as_separate_stores",
+#         wallet_keys={
+#             "alice": "alice_insecure1",
+#             "bob": "bob_insecure1",
+#         },
+#     )
