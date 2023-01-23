@@ -36,9 +36,10 @@ CHACHAPOLY_NONCE_LEN = 12
 CHACHAPOLY_TAG_LEN = 16
 ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_LEN
 
-async def fetch_pgsql_mwst_keys(conn, key_pass):
+
+async def fetch_pgsql_mwst_keys(conn, wallet_id, key_pass):
     metadata_row: list = await conn.fetch_multiple(
-        "SELECT wallet_id, value FROM metadata"
+        "SELECT wallet_id, value FROM metadata WHERE wallet_id = $1", (wallet_id)
     )
     print("metadata row: ", metadata_row)
     results_dict = {}
@@ -84,13 +85,11 @@ async def fetch_pgsql_mwst_keys(conn, key_pass):
     pprint.pprint(results_dict, indent=2)
     return results_dict
 
+
 async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
     print(" ")
     print(f"fx fetch_indy_key(conn: DbConnection, key_pass: {key_pass})")
     print(" ")
-
-    if conn.DB_TYPE.startswith("pgsql_mwst_"):
-        return await fetch_pgsql_mwst_keys(conn, key_pass)
 
     metadata_row = await conn.fetch_one("SELECT value FROM metadata")
     metadata_json = metadata_row[0]
@@ -658,25 +657,22 @@ def _credential_tags(cred_data: dict) -> dict:
     return tags
 
 
-async def upgrade(
-    conn: DbConnection,
-    profile_store_name: str = None,
-    wallet_keys: dict = None,
-    base_wallet_name: str = None,
-):
-    wallet_pw = wallet_keys.get(base_wallet_name)
-    await conn.connect()
+async def upgrade_pgsql_mwst_profiles(conn, wallet_pw, base_wallet_name, wallet_keys):
+    try:
+        await conn.pre_upgrade()
 
-    if conn.DB_TYPE == "pgsql_mwst_profiles":
-        try:
-            await conn.pre_upgrade()
-            indy_key_dict: dict = await fetch_indy_key(conn, wallet_pw)
-            print(" ")
-            print(f"fx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
+        indy_key_dict: dict = await fetch_pgsql_mwst_keys(
+            conn, base_wallet_name, wallet_pw
+        )
+        await create_config(conn, indy_key_dict[base_wallet_name], base_wallet_name)
+
+        for wallet_name, wallet_pw in wallet_keys:
+            indy_key_dict: dict = await fetch_pgsql_mwst_keys(
+                conn, wallet_name, wallet_pw
+            )
+            print(f"\nfx upgrade(db: DbConnection, wallet_pw: {wallet_pw})")
             pprint.pprint(indy_key_dict, indent=2)
             print(" ")
-
-            await create_config(conn, indy_key_dict[base_wallet_name], base_wallet_name)
 
             profile_row = await conn.retrieve_entries(
                 "SELECT * FROM profiles", optional=True
@@ -696,9 +692,24 @@ async def upgrade(
                 await update_items(conn, indy_key, profile_key, wallet_id, profile_id)
                 await conn.finish_upgrade()
                 await post_upgrade(conn._path, wallet_pw)  # TODO: pass in profile name
-        finally:
-            await conn.close()
-            print("pgsql_mwst_profiles upgrade done")
+    finally:
+        await conn.close()
+        print("pgsql_mwst_profiles upgrade done")
+
+
+async def upgrade(
+    conn: DbConnection,
+    profile_store_name: str = None,
+    wallet_keys: dict = None,
+    base_wallet_name: str = None,
+):
+    wallet_pw = wallet_keys.get(base_wallet_name)
+    await conn.connect()
+
+    if conn.DB_TYPE == "pgsql_mwst_profiles":
+        await upgrade_pgsql_mwst_profiles(
+            conn, wallet_pw, base_wallet_name, wallet_keys
+        )
 
     else:
         try:

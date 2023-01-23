@@ -59,12 +59,12 @@ class PgConnectionMWSTProfiles(PgConnection):
         )
         return [wallet_id[0] for wallet_id in wallet_id_list]
 
-    async def fetch_multiple(self, sql: str, optional: bool = False):
+    async def fetch_multiple(self, sql: str, args, optional: bool = False):
         """Fetch a single row from the database."""
         print(" ")
         print(f"fx fetch_one(self, sql: {sql}, optional: {optional})")
 
-        stmt: str = await self._conn.fetch(sql)
+        stmt: str = await self._conn.fetch(sql, args)
         fetched = []
         if len(stmt) > 0:
             for row in stmt:
