@@ -1,55 +1,17 @@
-import contextlib
-import shutil
 from pathlib import Path
+import shutil
 import time
+from typing import Callable, cast
 
-import pytest
 import docker
-from docker.errors import NotFound
+from docker.models.containers import Container
+import pytest
 
 from acapy_wallet_upgrade.__main__ import migration
 
 
-def docker_stop(client):
-    """Stop indy-demo-postgres container."""
-    try:
-        container = client.containers.get("indy-demo-postgres")
-    except NotFound:
-        pass
-    else:
-        container.stop()
-
-
-def copy_db_into_temp(tmp_path, bd_src):
-    """Copy database into temp directory."""
-    src = Path(__file__).parent / "input" / bd_src
-    d = tmp_path / "sub"
-    d.mkdir()
-    dst = d / bd_src
-    shutil.copytree(src, dst)
-    return dst
-
-
-def postgres_start_with_volume(tmp_path, bd_src):
-    """Run indy-demo-postgres container with a stored volume using a temp directory."""
-    dst = copy_db_into_temp(tmp_path, bd_src)
-    client = docker.from_env()
-    docker_stop(client)
-    with contextlib.suppress(Exception):
-        client.containers.run(
-            "postgres:11",
-            name="indy-demo-postgres",
-            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
-            ports={"5432/tcp": 5432},
-            environment=["POSTGRES_PASSWORD=mysecretpassword"],
-            auto_remove=True,
-            detach=True,
-        )
-        time.sleep(4)
-    return
-
-
 async def migrate_pg_db(
+    db_port: int,
     db_name: str,
     mode: str,
     profile_store_name: str = None,
@@ -58,7 +20,6 @@ async def migrate_pg_db(
 ):
     """Run migration script on postgresql database."""
     db_host = "localhost"
-    db_port = 5432
     user_name = "postgres"
     db_user_password = "mysecretpassword"
     # postgres[ql]://[username[:password]@][host[:port],]/database[?parameter_list]
@@ -78,54 +39,111 @@ async def migrate_pg_db(
     )
 
 
+@pytest.fixture
+def sqlite_temp(tmp_path: Path):
+    def _sqlite_temp(actor: str):
+        src = Path(__file__).parent / "input" / f"{actor}.db"
+        dst = tmp_path / f"{actor}.db"
+        shutil.copyfile(src, dst)
+        return dst
+
+    yield _sqlite_temp
+
+
+@pytest.fixture
+def sqlite_alice(sqlite_temp):
+    yield sqlite_temp("alice")
+
+
+@pytest.fixture
+def sqlite_bob(sqlite_temp):
+    yield sqlite_temp("bob")
+
+
 @pytest.mark.asyncio
-async def test_migration_sqlite(tmp_path):
+async def test_migration_sqlite(sqlite_alice, sqlite_bob):
     """
     Run the migration script with SQLite db files.
     """
-    d = tmp_path / "sub"
-    d.mkdir()
-
     # Alice
-    src_alice = Path(__file__).parent / "input" / "alice.db"
-    dst_alice = d / "alice.db"
-    shutil.copyfile(src_alice, dst_alice)
     await migration(
         mode="sqlite",
-        db_path=dst_alice,
+        db_path=str(sqlite_alice),
         wallet_keys={"alice": "insecure"},
         base_wallet_name="alice",
     )
 
     # Bob
-    src_bob = Path(__file__).parent / "input" / "bob.db"
-    dst_bob = d / "bob.db"
-    shutil.copyfile(src_bob, dst_bob)
     await migration(
         "sqlite",
-        db_path=dst_bob,
+        db_path=sqlite_bob,
         wallet_keys={"bob": "insecure"},
         base_wallet_name="bob",
     )
 
 
-@pytest.mark.asyncio
-async def test_migration_dbpw(tmp_path):
-    """
-    Run the migration script with the db in the docker container.
-    """
-    postgres_start_with_volume(tmp_path, "dbpw")
-    await migrate_pg_db("alice", "dbpw", "", {"alice": "alice_insecure0"}, "alice")
-    await migrate_pg_db("bob", "dbpw", "", {"bob": "bob_insecure0"}, "bob")
+def poll_until_pg_is_ready(container: Container, attempts: int = 5):
+    for _ in range(attempts):
+        exit_code, _ = container.exec_run("pg_isready")
+        if exit_code == 0:
+            break
+        else:
+            time.sleep(1)
+
+
+@pytest.fixture
+def postgres_with_volume(tmp_path: Path, unused_tcp_port_factory: Callable[[], int]):
+    client = docker.from_env()
+    containers = []
+
+    def _postgres_with_volume(volume_name: str):
+        src = Path(__file__).parent / "input" / volume_name
+        d = tmp_path / "sub"
+        d.mkdir()
+        dst = d / volume_name
+        shutil.copytree(src, dst)
+
+        port = unused_tcp_port_factory()
+        container = client.containers.run(
+            "postgres:11",
+            volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw"}},
+            ports={"5432/tcp": port},
+            environment=["POSTGRES_PASSWORD=mysecretpassword"],
+            auto_remove=True,
+            detach=True,
+        )
+        containers.append(container)
+
+        # Give the DB a moment to start
+        poll_until_pg_is_ready(cast(Container, container))
+        return port
+
+    yield _postgres_with_volume
+
+    for container in containers:
+        container.stop()
 
 
 @pytest.mark.asyncio
-async def test_migration_mwst_as_profiles(tmp_path):
+async def test_migration_dbpw(postgres_with_volume):
     """
     Run the migration script with the db in the docker container.
     """
-    postgres_start_with_volume(tmp_path, "mt-mwst")
+    port = postgres_with_volume("dbpw")
     await migrate_pg_db(
+        port, "alice", "dbpw", "", {"alice": "alice_insecure0"}, "alice"
+    )
+    await migrate_pg_db(port, "bob", "dbpw", "", {"bob": "bob_insecure0"}, "bob")
+
+
+@pytest.mark.asyncio
+async def test_migration_mwst_as_profiles(postgres_with_volume):
+    """
+    Run the migration script with the db in the docker container.
+    """
+    port = postgres_with_volume("mt-mwst")
+    await migrate_pg_db(
+        db_port=port,
         db_name="wallets",
         mode="mwst_as_profiles",
         profile_store_name="multitenant_sub_wallet",
