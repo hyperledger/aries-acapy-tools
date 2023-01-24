@@ -1,6 +1,7 @@
+from urllib.parse import urlparse
 import aiosqlite
 
-from .db_connection import DbConnection
+from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
 
 
@@ -9,9 +10,11 @@ class SqliteConnection(DbConnection):
 
     DB_TYPE = "sqlite"
 
-    def __init__(self, path: str) -> "SqliteConnection":
+    def __init__(self, uri: str):
         """Initialize a SqliteConnection instance."""
-        self._path = path
+        self.uri = uri
+        parsed = urlparse(uri)
+        self._path = parsed.path
         self._conn: aiosqlite.Connection = None
         self._protocol: str = "sqlite"
 
@@ -97,17 +100,14 @@ class SqliteConnection(DbConnection):
         )
         return {}
 
-    async def insert_profile(self, pass_key: str, name: str, key: bytes):
+    async def create_config(self, default_profile: str, key: str):
         """Insert the initial profile."""
         await self._conn.executemany(
             "INSERT INTO config (name, value) VALUES (?1, ?2)",
             (
-                ("default_profile", name),
-                ("key", pass_key),
+                ("default_profile", default_profile),
+                ("key", key),
             ),
-        )
-        await self._conn.execute(
-            "INSERT INTO profiles (name, profile_key) VALUES (?1, ?2)", (name, key)
         )
         await self._conn.commit()
 
@@ -125,17 +125,36 @@ class SqliteConnection(DbConnection):
         """
         )
 
-    async def fetch_one(self, sql: str, optional: bool = False):
-        """Fetch a single row from the database."""
-        stmt = await self._conn.execute(sql)
+    async def close(self):
+        """Release the connection."""
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
+
+    def get_wallet(self) -> "SqliteWallet":
+        return SqliteWallet(self._conn)
+
+
+class SqliteWallet(Wallet):
+    def __init__(self, conn: aiosqlite.Connection):
+        self._conn = conn
+
+    async def insert_profile(self, name: str, key: bytes):
+        """Insert the initial profile."""
+        await self._conn.execute(
+            "INSERT INTO profiles (name, profile_key) VALUES (?1, ?2)", (name, key)
+        )
+        await self._conn.commit()
+
+    async def get_metadata(self):
+        stmt = await self._conn.execute("SELECT value FROM metadata")
         found = None
         async for row in stmt:
             if found is None:
-                found = row
+                found = row[0]
             else:
                 raise Exception("Found duplicate row")
-        if not optional and not found:
-            raise Exception("Row not found")
+
         return found
 
     async def fetch_pending_items(self, limit: int):
@@ -176,9 +195,3 @@ class SqliteConnection(DbConnection):
                 )
         await self._conn.execute("DELETE FROM items_old WHERE id IN (?1)", (del_ids,))
         await self._conn.commit()
-
-    async def close(self):
-        """Release the connection."""
-        if self._conn:
-            await self._conn.close()
-            self._conn = None

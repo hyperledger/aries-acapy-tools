@@ -323,7 +323,7 @@ async def with_mt_agents():
             json={
                 "label": "Alice",
                 "wallet_name": "alice",
-                "wallet_key": "agency_insecure0",
+                "wallet_key": "alice_insecure1",
                 "wallet_type": "indy",
             },
             response=CreateWalletResponse,
