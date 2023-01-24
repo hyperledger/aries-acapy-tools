@@ -230,7 +230,7 @@ class PgWallet(Wallet):
                     """
                         INSERT INTO items (profile_id, kind, category, name, value)
                         VALUES (1, 2, $1, $2, $3) RETURNING id
-                    """,  # TODO update profile_id to be a parameter
+                    """,
                     item["category"],
                     item["name"],
                     item["value"],

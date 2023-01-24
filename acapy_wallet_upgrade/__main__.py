@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from .error import UpgradeError
 from .pg_connection import PgConnection
-from .pg_connection_mwst_profiles import PgMWSTConnection
+from .pg_mwst_connection import PgMWSTConnection
 from .sqlite_connection import SqliteConnection
 from .strategies import DbpwStrategy, MwstAsProfilesStrategy
 
