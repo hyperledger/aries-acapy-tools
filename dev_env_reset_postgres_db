@@ -25,6 +25,6 @@ fi
 
 $DOCKER run --rm -d --name indy-demo-postgres \
 	-p 5432:5432 \
-	-v $(pwd)/db:/var/lib/postgresql/data \
+	-v $(pwd)/tests/input/dbpw:/var/lib/postgresql/data \
 	-e POSTGRES_PASSWORD=mysecretpassword \
 	postgres:11 && echo "Started postgres container"

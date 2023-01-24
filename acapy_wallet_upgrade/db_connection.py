@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Sequence, Tuple, Union
 
 
 class DbConnection(ABC):
@@ -15,11 +16,11 @@ class DbConnection(ABC):
         """Check for existence of a table."""
 
     @abstractmethod
-    async def pre_upgrade(self, name: str) -> bool:
+    async def pre_upgrade(self) -> bool:
         """Add new tables and columns."""
 
     @abstractmethod
-    async def insert_profile(self, name: str, key: bytes):
+    async def create_config(self, default_profile: str, key: str):
         """Insert the initial profile."""
 
     @abstractmethod
@@ -27,17 +28,28 @@ class DbConnection(ABC):
         """Complete the upgrade."""
 
     @abstractmethod
-    async def fetch_one(self, sql: str, optional: bool = False):
-        """Fetch a single row from the database."""
+    async def close(self):
+        """Release the connection."""
+
+
+class Wallet(ABC):
+    """Abstract wallet.
+
+    Represents a single wallet in an Indy SDK DB.
+    """
 
     @abstractmethod
-    async def fetch_pending_items(self, limit: int):
+    async def insert_profile(self, name: str, key: bytes):
+        """Insert the initial profile."""
+
+    @abstractmethod
+    async def get_metadata(self) -> Union[str, bytes]:
+        """Fetch metadata value from the database."""
+
+    @abstractmethod
+    async def fetch_pending_items(self, limit: int) -> Sequence[Tuple]:
         """Fetch un-updated items."""
 
     @abstractmethod
     async def update_items(self, items):
         """Update items in the database."""
-
-    @abstractmethod
-    async def close(self):
-        """Release the connection."""
