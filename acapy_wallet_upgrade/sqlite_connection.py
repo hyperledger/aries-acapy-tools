@@ -1,17 +1,20 @@
+from urllib.parse import urlparse
 import aiosqlite
 
 from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
 
 
-class SqliteConnection(DbConnection, Wallet):
+class SqliteConnection(DbConnection):
     """Sqlite connection."""
 
     DB_TYPE = "sqlite"
 
-    def __init__(self, path: str) -> "SqliteConnection":
+    def __init__(self, uri: str):
         """Initialize a SqliteConnection instance."""
-        self._path = path
+        self.uri = uri
+        parsed = urlparse(uri)
+        self._path = parsed.path
         self._conn: aiosqlite.Connection = None
         self._protocol: str = "sqlite"
 
@@ -97,13 +100,13 @@ class SqliteConnection(DbConnection, Wallet):
         )
         return {}
 
-    async def create_config(self, pass_key: str, name: str):
+    async def create_config(self, default_profile: str, key: str):
         """Insert the initial profile."""
         await self._conn.executemany(
             "INSERT INTO config (name, value) VALUES (?1, ?2)",
             (
-                ("default_profile", name),
-                ("key", pass_key),
+                ("default_profile", default_profile),
+                ("key", key),
             ),
         )
         await self._conn.commit()
@@ -127,6 +130,14 @@ class SqliteConnection(DbConnection, Wallet):
         if self._conn:
             await self._conn.close()
             self._conn = None
+
+    def get_wallet(self) -> "SqliteWallet":
+        return SqliteWallet(self._conn)
+
+
+class SqliteWallet(Wallet):
+    def __init__(self, conn: aiosqlite.Connection):
+        self._conn = conn
 
     async def insert_profile(self, name: str, key: bytes):
         """Insert the initial profile."""

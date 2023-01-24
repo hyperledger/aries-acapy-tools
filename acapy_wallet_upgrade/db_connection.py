@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Sequence, Tuple, Union
 
 
 class DbConnection(ABC):
@@ -20,7 +20,7 @@ class DbConnection(ABC):
         """Add new tables and columns."""
 
     @abstractmethod
-    async def create_config(self, name: str, key: bytes):
+    async def create_config(self, default_profile: str, key: str):
         """Insert the initial profile."""
 
     @abstractmethod
@@ -47,7 +47,7 @@ class Wallet(ABC):
         """Fetch metadata value from the database."""
 
     @abstractmethod
-    async def fetch_pending_items(self, limit: int):
+    async def fetch_pending_items(self, limit: int) -> Sequence[Tuple]:
         """Fetch un-updated items."""
 
     @abstractmethod

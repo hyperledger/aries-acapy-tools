@@ -7,18 +7,18 @@ from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
 
 
-class PgConnection(DbConnection, Wallet):
+class PgConnection(DbConnection):
     """Postgres connection."""
 
     DB_TYPE = "pgsql"
 
     def __init__(
         self,
-        path: str,
+        uri: str,
     ):
         """Initialize a PgConnection instance."""
-        self._path: str = path
-        self.parsed_url = urlparse(path)
+        self.uri = uri
+        self.parsed_url = urlparse(uri)
         self._conn: asyncpg.Connection = None
 
     async def connect(self):
@@ -138,14 +138,14 @@ class PgConnection(DbConnection, Wallet):
 
         return {}
 
-    async def create_config(self, pass_key: str, name: str):
+    async def create_config(self, default_profile: str, key: str):
         """Insert the initial profile."""
         async with self._conn.transaction():
             await self._conn.executemany(
                 """
                     INSERT INTO config (name, value) VALUES($1, $2)
                 """,
-                (("default_profile", name), ("key", pass_key)),
+                (("default_profile", default_profile), ("key", key)),
             )
 
     async def finish_upgrade(self):
@@ -168,6 +168,14 @@ class PgConnection(DbConnection, Wallet):
         if self._conn:
             await self._conn.close()
             self._conn = None
+
+    def get_wallet(self) -> "PgWallet":
+        return PgWallet(self._conn)
+
+
+class PgWallet(Wallet):
+    def __init__(self, conn: asyncpg.Connection):
+        self._conn = conn
 
     async def insert_profile(self, name: str, key: bytes):
         """Insert the initial profile."""
@@ -192,6 +200,7 @@ class PgConnection(DbConnection, Wallet):
                     found = decoded
                 else:
                     raise Exception("Found duplicate row")
+            return found
 
         else:
             raise Exception("Row not found")

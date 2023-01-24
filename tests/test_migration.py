@@ -1,22 +1,23 @@
 from pathlib import Path
 import shutil
 import time
-from typing import Callable, cast
+from typing import Callable, Dict, Optional, cast
 
 import docker
 from docker.models.containers import Container
 import pytest
 
-from acapy_wallet_upgrade.__main__ import migration
+from acapy_wallet_upgrade.__main__ import main
 
 
 async def migrate_pg_db(
     db_port: int,
     db_name: str,
-    mode: str,
-    profile_store_name: str = None,
-    wallet_keys: dict = {},
-    base_wallet_name: str = None,
+    strategy: str,
+    wallet_name: Optional[str] = None,
+    wallet_key: Optional[str] = None,
+    base_wallet_name: Optional[str] = None,
+    wallet_keys: Optional[Dict[str, str]] = None,
 ):
     """Run migration script on postgresql database."""
     db_host = "localhost"
@@ -30,12 +31,13 @@ async def migrate_pg_db(
     #                                            |          |- database name
     #                                            |
     #                                            |- hostspec
-    await migration(
-        mode,
+    await main(
+        strategy,
         f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}",
-        profile_store_name,
-        wallet_keys,
+        wallet_name,
+        wallet_key,
         base_wallet_name,
+        wallet_keys,
     )
 
 
@@ -66,19 +68,19 @@ async def test_migration_sqlite(sqlite_alice, sqlite_bob):
     Run the migration script with SQLite db files.
     """
     # Alice
-    await migration(
-        mode="sqlite",
-        db_path=str(sqlite_alice),
-        wallet_keys={"alice": "insecure"},
-        base_wallet_name="alice",
+    await main(
+        strategy="dbpw",
+        uri=f"sqlite://{sqlite_alice}",
+        wallet_name="alice",
+        wallet_key="insecure",
     )
 
     # Bob
-    await migration(
-        "sqlite",
-        db_path=sqlite_bob,
-        wallet_keys={"bob": "insecure"},
-        base_wallet_name="bob",
+    await main(
+        strategy="dbpw",
+        uri=f"sqlite://{sqlite_bob}",
+        wallet_name="bob",
+        wallet_key="insecure",
     )
 
 
@@ -131,9 +133,19 @@ async def test_migration_dbpw(postgres_with_volume):
     """
     port = postgres_with_volume("dbpw")
     await migrate_pg_db(
-        port, "alice", "dbpw", "", {"alice": "alice_insecure0"}, "alice"
+        db_port=port,
+        db_name="alice",
+        strategy="dbpw",
+        wallet_name="alice",
+        wallet_key="alice_insecure0",
     )
-    await migrate_pg_db(port, "bob", "dbpw", "", {"bob": "bob_insecure0"}, "bob")
+    await migrate_pg_db(
+        db_port=port,
+        db_name="bob",
+        strategy="dbpw",
+        wallet_name="bob",
+        wallet_key="bob_insecure0",
+    )
 
 
 @pytest.mark.asyncio
@@ -145,14 +157,13 @@ async def test_migration_mwst_as_profiles(postgres_with_volume):
     await migrate_pg_db(
         db_port=port,
         db_name="wallets",
-        mode="mwst_as_profiles",
-        profile_store_name="multitenant_sub_wallet",
+        strategy="mwst-as-profiles",
+        base_wallet_name="agency",
         wallet_keys={
             "agency": "agency_insecure0",
             "alice": "alice_insecure1",
             "bob": "bob_insecure1",
         },
-        base_wallet_name="agency",
     )
 
 
