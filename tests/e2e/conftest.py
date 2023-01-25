@@ -26,8 +26,9 @@ class WalletTypeToBeTested:
     @pytest.fixture(scope="class")
     def tails(self):
         client = docker.from_env()
-        client.containers.run(
+        container = client.containers.run(
             "ghcr.io/bcgov/tails-server:latest",
+            name="tails",
             ports={"6543/tcp": 6543},
             environment=[
                 "GENESIS_URL=https://raw.githubusercontent.com/Indicio-tech/indicio-network/main/genesis_files/pool_transactions_testnet_genesis"
@@ -40,6 +41,8 @@ class WalletTypeToBeTested:
             auto_remove=True,
             detach=True,
         )
+        yield "http://tails:6543"
+        container.stop()
 
     @pytest.fixture(scope="class")
     def alice(self, tails):
@@ -98,7 +101,7 @@ class WalletTypeToBeTested:
     @pytest.mark.asyncio
     @pytest.fixture(scope="class")
     async def connections(self, alice: Controller, bob: Controller):
-        print(alice,"\n",bob)
+        print(alice, "\n", bob)
         async with alice, bob:
             alice_conn, bob_conn = await didexchange(alice, bob)
 
@@ -124,9 +127,9 @@ class WalletTypeToBeTested:
 
 class TestSqliteDBPW(WalletTypeToBeTested):
     @pytest.fixture(scope="class")
-    def alice(self):
+    def alice(self, tails):
         client = docker.from_env()
-        client.containers.run(
+        container = client.containers.run(
             "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
             name="alice-sqlite",
             ports={"3001/tcp": 3001},
@@ -148,17 +151,18 @@ class TestSqliteDBPW(WalletTypeToBeTested):
             detach=True,
             healthcheck={
                 "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
-                "interval": 7000000000,
-                "timeout": 5000000000,
+                "interval": 7e9,
+                "timeout": 5e9,
                 "retries": 5,
             },
         )
-        return Controller("http://alice-sqlite:3001")
+        yield Controller("http://alice-sqlite:3001")
+        container.stop()
 
     @pytest.fixture(scope="class")
-    def bob(self):
+    def bob(self, tails):
         client = docker.from_env()
-        client.containers.run(
+        container = client.containers.run(
             "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
             name="bob-sqlite",
             ports={"3001/tcp": 3002},
@@ -181,13 +185,13 @@ class TestSqliteDBPW(WalletTypeToBeTested):
             detach=True,
             healthcheck={
                 "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
-                "interval": 7000000000,
-                "timeout": 5000000000,
+                "interval": 7e9,
+                "timeout": 5e9,
                 "retries": 5,
             },
         )
-        return Controller("http://bob-sqlite:3001")
-        
+        yield Controller("http://bob-sqlite:3001")
+        container.stop()
 
     @pytest.fixture(scope="class", autouse=True)
     @pytest.mark.asyncio
