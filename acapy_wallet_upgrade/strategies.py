@@ -494,12 +494,17 @@ class MwstAsProfilesStrategy(Strategy):
     """MultiWalletSingleTable as Askar Profiles upgrade strategy."""
 
     def __init__(
-        self, conn: PgMWSTConnection, base_wallet_name: str, wallet_keys: Dict[str, str]
+        self,
+        conn: PgMWSTConnection,
+        base_wallet_name: str,
+        wallet_keys: Dict[str, str],
+        allow_missing_wallet: bool = None,
     ):
         self.conn = conn
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = wallet_keys[base_wallet_name]
         self.wallet_keys = wallet_keys
+        self.allow_missing_wallet = allow_missing_wallet
 
     async def init_profile(
         self, wallet: Wallet, name: str, base_indy_key: dict, indy_key: dict
@@ -521,7 +526,9 @@ class MwstAsProfilesStrategy(Strategy):
     async def run(self):
         """Perform the upgrade."""
         await self.conn.connect()
-
+        await self.conn.check_missing_wallet_flag(
+            self.wallet_keys, self.allow_missing_wallet
+        )
         try:
             await self.conn.pre_upgrade()
             base_wallet = self.conn.get_wallet(self.base_wallet_name)
@@ -552,9 +559,15 @@ class MwstAsProfilesStrategy(Strategy):
 class MwstAsStoresStrategy(Strategy):
     """MultiWalletSingleTable as separate Askar stores upgrade strategy."""
 
-    def __init__(self, conn: PgMWSTConnection, wallet_keys: Dict[str, str]):
+    def __init__(
+        self,
+        conn: PgMWSTStoresConnection,
+        wallet_keys: Dict[str, str],
+        allow_missing_wallet: bool = None,
+    ):
         self.conn = conn
         self.wallet_keys = wallet_keys
+        self.allow_missing_wallet = allow_missing_wallet
 
     def create_new_db_connection(self, wallet_name: str):
         parsed = urlparse(self.conn.uri)
@@ -572,6 +585,9 @@ class MwstAsStoresStrategy(Strategy):
 
         # Connect to original database
         await self.conn.connect()
+        await self.conn.check_missing_wallet_flag(
+            self.wallet_keys, self.allow_missing_wallet
+        )
 
         for wallet_name, wallet_key in self.wallet_keys.items():
 

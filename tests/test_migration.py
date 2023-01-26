@@ -8,6 +8,7 @@ from docker.models.containers import Container
 import pytest
 
 from acapy_wallet_upgrade.__main__ import main
+from acapy_wallet_upgrade.error import UpgradeError, MissingWalletError
 
 
 async def migrate_pg_db(
@@ -18,6 +19,7 @@ async def migrate_pg_db(
     wallet_key: Optional[str] = None,
     base_wallet_name: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
+    allow_missing_wallet=None,
 ):
     """Run migration script on postgresql database."""
     db_host = "localhost"
@@ -38,6 +40,7 @@ async def migrate_pg_db(
         wallet_key,
         base_wallet_name,
         wallet_keys,
+        allow_missing_wallet,
     )
 
 
@@ -148,8 +151,30 @@ async def test_migration_dbpw(postgres_with_volume):
     )
 
 
+@pytest.mark.parametrize(
+    "wallet_keys, allow_missing_wallet",
+    [
+        (
+            {
+                "agency": "agency_insecure0",
+                "alice": "alice_insecure1",
+                "bob": "bob_insecure1",
+            },
+            False,
+        ),
+        (
+            {
+                "agency": "agency_insecure0",
+                "alice": "alice_insecure1",
+            },
+            True,
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_migration_mwst_as_profiles(postgres_with_volume):
+async def test_migration_mwst_as_profiles(
+    postgres_with_volume, wallet_keys, allow_missing_wallet
+):
     """
     Run the migration script with the db in the docker container.
     """
@@ -159,16 +184,33 @@ async def test_migration_mwst_as_profiles(postgres_with_volume):
         db_name="wallets",
         strategy="mwst-as-profiles",
         base_wallet_name="agency",
-        wallet_keys={
-            "agency": "agency_insecure0",
-            "alice": "alice_insecure1",
-            "bob": "bob_insecure1",
-        },
+        wallet_keys=wallet_keys,
+        allow_missing_wallet=allow_missing_wallet,
     )
 
 
+@pytest.mark.parametrize(
+    "wallet_keys, allow_missing_wallet",
+    [
+        (
+            {
+                "alice": "alice_insecure1",
+                "bob": "bob_insecure1",
+            },
+            False,
+        ),
+        (
+            {
+                "alice": "alice_insecure1",
+            },
+            True,
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_migration_mwst_as_separate_stores(postgres_with_volume):
+async def test_migration_mwst_as_separate_stores(
+    postgres_with_volume, wallet_keys, allow_missing_wallet
+):
     """
     Run the migration script with the db in the docker container.
     """
@@ -177,8 +219,67 @@ async def test_migration_mwst_as_separate_stores(postgres_with_volume):
         db_port=port,
         db_name="wallets",
         strategy="mwst-as-stores",
-        wallet_keys={
-            "alice": "alice_insecure1",
-            "bob": "bob_insecure1",
-        },
+        wallet_keys=wallet_keys,
+        allow_missing_wallet=allow_missing_wallet,
     )
+
+
+@pytest.mark.parametrize(
+    "volume, strategy, wallet_keys, error",
+    [
+        (
+            "mt-mwst",
+            "mwst-as-profiles",
+            {
+                "agency": "agency_insecure0",
+                "alice": "alice_insecure1",
+            },
+            MissingWalletError,
+        ),
+        (
+            "mt-mwst",
+            "mwst-as-profiles",
+            {
+                "agency": "agency_insecure0",
+                "alice": "alice_insecure1",
+                "bob": "bob_insecure1",
+                "carol": "carol_insecure1",
+            },
+            UpgradeError,
+        ),
+        (
+            "mwst",
+            "mwst-as-stores",
+            {
+                "alice": "alice_insecure1",
+            },
+            MissingWalletError,
+        ),
+        (
+            "mwst",
+            "mwst-as-stores",
+            {
+                "alice": "alice_insecure1",
+                "bob": "bob_insecure1",
+                "carol": "carol_insecure1",
+            },
+            UpgradeError,
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_migration_mwst_wallet_misalignment(
+    postgres_with_volume, volume, strategy, wallet_keys, error
+):
+    """
+    Run the migration script with the db in the docker container.
+    """
+    port = postgres_with_volume(volume)
+    with pytest.raises(error):
+        await migrate_pg_db(
+            db_port=port,
+            db_name="wallets",
+            strategy=strategy,
+            base_wallet_name="agency",
+            wallet_keys=wallet_keys,
+        )
