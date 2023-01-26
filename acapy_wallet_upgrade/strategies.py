@@ -7,6 +7,7 @@ import json
 import os
 import re
 from typing import Dict, Optional, Union
+from urllib.parse import urlparse
 
 import base58
 import cbor2
@@ -547,3 +548,46 @@ class MwstAsProfilesStrategy(Strategy):
             await self.convert_items_to_askar(
                 self.conn.uri, self.base_wallet_key, wallet_name
             )
+
+
+class MwstAsStoresStrategy(Strategy):
+    """MultiWalletSingleTable as separate Askar stores upgrade strategy."""
+
+    def __init__(self, conn: PgMWSTConnection, wallet_keys: Dict[str, str]):
+        self.conn = conn
+        self.wallet_keys = wallet_keys
+
+    def create_new_db_connection(self, wallet_name: str):
+        parsed = urlparse(self.conn.uri)
+        print(parsed)
+        new_conn_uri = f"{parsed.scheme}://{parsed.netloc}/{wallet_name}"
+        return PgMWSTConnection(new_conn_uri)
+
+    async def run(self):
+        """Perform the upgrade."""
+
+        for wallet_name, wallet_key in self.wallet_keys.items():
+
+            # Connect to original database
+            await self.conn.connect()
+
+            # Connect to new database
+            new_db_conn: PgMWSTConnection = self.create_new_db_connection(wallet_name)
+            await new_db_conn.connect()  # TODO: debug
+
+            wallet = self.conn.get_wallet(wallet_name)
+            try:
+                await new_db_conn.pre_upgrade()
+                indy_key = await self.fetch_indy_key(wallet, wallet_key)
+                # TODO: create config and profile on new db connection
+                await self.create_config(wallet_name, indy_key)
+                profile_key = await self.init_profile(
+                    wallet, self.wallet_name, indy_key
+                )
+                await new_db_conn.update_items(wallet, indy_key, profile_key)
+                await self.conn.finish_upgrade()
+            finally:
+                await self.conn.close()
+                await new_db_conn.close()
+
+            await self.convert_items_to_askar(new_db_conn.uri, wallet_key)

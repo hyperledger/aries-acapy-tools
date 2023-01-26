@@ -167,17 +167,18 @@ async def test_migration_mwst_as_profiles(postgres_with_volume):
     )
 
 
-# @pytest.mark.asyncio
-# async def test_migration_mwst_as_separate_stores(tmp_path):
-#     """
-#     Run the migration script with the db in the docker container.
-#     """
-#     postgres_start_with_volume(tmp_path, "mwst")  # TODO: update mwst
-#     await migrate_pg_db(
-#         db_name="wallets",
-#         mode="mwst_as_separate_stores",
-#         wallet_keys={
-#             "alice": "alice_insecure1",
-#             "bob": "bob_insecure1",
-#         },
-#     )
+@pytest.mark.asyncio
+async def test_migration_mwst_as_separate_stores(postgres_with_volume):
+    """
+    Run the migration script with the db in the docker container.
+    """
+    port = postgres_with_volume("mwst")
+    await migrate_pg_db(
+        db_port=port,
+        db_name="wallets",
+        strategy="mwst-as-stores",
+        wallet_keys={
+            "alice": "alice_insecure1",
+            "bob": "bob_insecure1",
+        },
+    )

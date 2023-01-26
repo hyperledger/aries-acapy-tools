@@ -9,9 +9,9 @@ from urllib.parse import urlparse
 
 from .error import UpgradeError
 from .pg_connection import PgConnection
-from .pg_mwst_connection import PgMWSTConnection
+from .pg_mwst_connection import PgMWSTConnection, PgMWSTStoresConnection
 from .sqlite_connection import SqliteConnection
-from .strategies import DbpwStrategy, MwstAsProfilesStrategy
+from .strategies import DbpwStrategy, MwstAsProfilesStrategy, MwstAsStoresStrategy
 
 
 def config():
@@ -102,8 +102,8 @@ async def main(
         if not wallet_keys:
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
-        conn = PgMWSTConnection(uri)
-        raise NotImplementedError("TODO")
+        conn = PgMWSTStoresConnection(uri)
+        strategy_inst = MwstAsStoresStrategy(conn, wallet_keys)
 
     else:
         raise UpgradeError("Invalid strategy")

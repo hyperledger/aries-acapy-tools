@@ -27,6 +27,87 @@ class PgMWSTConnection(PgConnection):
         return PgMWSTWallet(self._conn, wallet_id)
 
 
+class PgMWSTStoresConnection(PgMWSTConnection):
+    async def pre_upgrade(self) -> dict:
+        """Add new tables and columns."""
+        if not await self.find_table("metadata"):
+            raise UpgradeError("No metadata table found: not an Indy wallet database")
+
+        if await self.find_table("config"):
+            stmt = await self._conn.fetch(
+                """
+                SELECT name, value FROM config
+                """
+            )
+            config = {}
+            if len(stmt) > 0:
+                for row in stmt:
+                    config[row[0]] = row[1]
+            return config
+        else:
+            async with self._conn.transaction():
+                await self._conn.execute(
+                    """
+                    CREATE TABLE config (
+                        name TEXT NOT NULL,
+                        value TEXT,
+                        PRIMARY KEY (name)
+                    );
+                    """
+                )
+        await self._create_table(
+            "profiles",
+            """
+            CREATE TABLE profiles (
+                id BIGSERIAL,
+                name TEXT NOT NULL,
+                reference TEXT NULL,
+                profile_key BYTEA NULL,
+                PRIMARY KEY (id)
+            );
+            CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
+            """,
+        )
+        await self._create_table(
+            "items_tags",
+            """
+            CREATE TABLE items_tags (
+                id BIGSERIAL,
+                item_id BIGINT NOT NULL,
+                name BYTEA NOT NULL,
+                value BYTEA NOT NULL,
+                plaintext SMALLINT NOT NULL,
+                PRIMARY KEY (id),
+                FOREIGN KEY (item_id) REFERENCES items (id)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE INDEX ix_items_tags_item_id ON items_tags(item_id);
+            CREATE INDEX ix_items_tags_name_enc
+                ON items_tags(name, SUBSTR(value, 1, 12)) include (item_id)
+                WHERE plaintext=0;
+            CREATE INDEX ix_items_tags_name_plain
+                ON items_tags(name, value) include (item_id)
+                WHERE plaintext=1;
+            """,
+        )
+
+        return {}
+
+    async def finish_upgrade(self):
+        """Complete the upgrade."""
+
+        await self._conn.execute(
+            """
+            BEGIN TRANSACTION;
+            DROP TABLE metadata;
+            DROP TABLE tags_encrypted;
+            DROP TABLE tags_plaintext;
+            INSERT INTO config (name, value) VALUES ('version', 1);
+            COMMIT;
+            """
+        )
+
+
 class PgMWSTWallet(PgWallet):
     def __init__(
         self, conn: Connection, wallet_id: str, profile_id: Optional[str] = None
