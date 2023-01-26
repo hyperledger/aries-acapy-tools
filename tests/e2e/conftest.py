@@ -1,24 +1,23 @@
 import asyncio
-from contextlib import asynccontextmanager, contextmanager, closing
-from pathlib import Path
 import shutil
 import socket
 import time
+from contextlib import asynccontextmanager, closing, contextmanager
+from pathlib import Path
 from typing import Callable, cast
 
+import docker
+import pytest
+import pytest_asyncio
 from asyncpg import Path
 from controller import Controller
 from controller.models import ConnRecord
-from controller.protocols import (
-    didexchange,
-    indy_anoncred_credential_artifacts,
-    indy_anoncred_onboard,
-    indy_issue_credential_v1,
-)
-import docker
+from controller.protocols import (didexchange,
+                                  indy_anoncred_credential_artifacts,
+                                  indy_anoncred_onboard,
+                                  indy_issue_credential_v1)
+from docker import APIClient
 from docker.models.containers import Container
-import pytest
-import pytest_asyncio
 
 from acapy_wallet_upgrade.__main__ import main
 
@@ -30,6 +29,11 @@ from acapy_wallet_upgrade.__main__ import main
 
     yield _post"""
 
+# https://stackoverflow.com/a/64971593
+def get_health(container: Container):
+    api_client = APIClient()
+    inspect_results = api_client.inspect_container(container.name)
+    return inspect_results['State']['Health']['Status']
 
 class WalletTypeToBeTested:
     @pytest.fixture(scope="class")
@@ -72,10 +76,7 @@ class WalletTypeToBeTested:
         self, container: Container, port: int, attempts: int = 5
     ):
         for _ in range(attempts):
-            exit_code, _ = container.exec_run(
-                f"curl -s -o /dev/null -w '%{{http_code}}' 'http://localhost:{port}/status/live' | grep '200' > /dev/null"
-            )
-            if exit_code == 0:
+            if get_health(container) == 'healthy':
                 break
             else:
                 time.sleep(1)
@@ -189,6 +190,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
                         "mode": "rw,z",
                     }
                 },
+                domainname="alice-sqlite",
                 name="alice-sqlite",
                 ports={"3001/tcp": 3001},
                 environment=["RUST_LOG=TRACE"],
@@ -250,7 +252,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
             auto_remove=True,
             detach=True,
             healthcheck={
-                "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
+                "test": "curl -s -o /dev/null -w '%{http_code}' 'http://localhost:3001/status/live' | grep '200' > /dev/null",
                 "interval": int(7e9),
                 "timeout": int(5e9),
                 "retries": 5,
