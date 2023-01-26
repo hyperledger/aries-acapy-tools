@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, Tuple, Union
+from typing import AsyncIterator, Sequence, Tuple, Union
 
 
 class DbConnection(ABC):
@@ -16,7 +16,7 @@ class DbConnection(ABC):
         """Check for existence of a table."""
 
     @abstractmethod
-    async def pre_upgrade(self) -> bool:
+    async def pre_upgrade(self):
         """Add new tables and columns."""
 
     @abstractmethod
@@ -47,7 +47,7 @@ class Wallet(ABC):
         """Fetch metadata value from the database."""
 
     @abstractmethod
-    async def fetch_pending_items(self, limit: int) -> Sequence[Tuple]:
+    def fetch_pending_items(self, limit: int) -> AsyncIterator[Sequence[Tuple]]:
         """Fetch un-updated items."""
 
     @abstractmethod

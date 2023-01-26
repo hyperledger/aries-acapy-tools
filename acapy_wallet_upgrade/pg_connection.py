@@ -52,7 +52,7 @@ class PgConnection(DbConnection):
             async with self._conn.transaction():
                 await self._conn.execute(cmd)
 
-    async def pre_upgrade(self) -> dict:
+    async def pre_upgrade(self):
         """Add new tables and columns."""
         if not await self.find_table("metadata"):
             raise UpgradeError("No metadata table found: not an Indy wallet database")
@@ -136,8 +136,6 @@ class PgConnection(DbConnection):
             """,
         )
 
-        return {}
-
     async def create_config(self, default_profile: str, key: str):
         """Insert the initial profile."""
         async with self._conn.transaction():
@@ -207,18 +205,21 @@ class PgWallet(Wallet):
 
     async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items."""
-        stmt = await self._conn.fetch(
-            """
-            SELECT i.id, i.type, i.name, i.value, i.key,
-            (SELECT string_agg(encode(te.name::bytea, 'hex') || ':' || encode(te.value::bytea, 'hex')::text, ',')
-                FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
-            (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
-                FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
-            FROM items_old i LIMIT $1;
-            """,  # noqa
-            limit,
-        )
-        return stmt
+        while True:
+            stmt = await self._conn.fetch(
+                """
+                SELECT i.id, i.type, i.name, i.value, i.key,
+                (SELECT string_agg(encode(te.name::bytea, 'hex') || ':' || encode(te.value::bytea, 'hex')::text, ',')
+                    FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
+                (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
+                    FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
+                FROM items_old i LIMIT $1;
+                """,  # noqa
+                limit,
+            )
+            if not stmt:
+                break
+            yield stmt
 
     async def update_items(self, items):
         """Update items in the database."""
