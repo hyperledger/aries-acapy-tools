@@ -2,6 +2,7 @@ import asyncio
 import shutil
 import time
 from pathlib import Path
+from acapy_wallet_upgrade.__main__ import main
 from typing import Callable, Tuple, cast
 
 import docker
@@ -107,11 +108,14 @@ class WalletTypeToBeTested:
 
         yield alice_conn, bob_conn
 
+    # - Issued revocable credential
+    # - Cred def with revocation support
+    # - Public DID
+
     @pytest.mark.asyncio
     @pytest.fixture(scope="class", autouse=True)
     async def migrate(self, connections):
-        # TODO do migration step
-        assert connections
+        pass
 
     @pytest.mark.asyncio
     async def test_connections(
@@ -126,11 +130,13 @@ class WalletTypeToBeTested:
 
 
 class TestSqliteDBPW(WalletTypeToBeTested):
+    
     @pytest.fixture(scope="class")
-    def alice(self, tails):
+    def alice(self, tails, tmp_path):
         client = docker.from_env()
         container = client.containers.run(
             "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
+            volume={tmp_path/"alice": {"bind": "/home/indy/.indy_client/wallet/alice", "mode": "rw"}},
             name="alice-sqlite",
             ports={"3001/tcp": 3001},
             environment=["RUST_LOG=TRACE"],
@@ -151,8 +157,8 @@ class TestSqliteDBPW(WalletTypeToBeTested):
             detach=True,
             healthcheck={
                 "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
-                "interval": 7e9,
-                "timeout": 5e9,
+                "interval": int(7e9),
+                "timeout": int(5e9),
                 "retries": 5,
             },
         )
@@ -160,10 +166,11 @@ class TestSqliteDBPW(WalletTypeToBeTested):
         container.stop()
 
     @pytest.fixture(scope="class")
-    def bob(self, tails):
+    def bob(self, tails, tmp_path):
         client = docker.from_env()
         container = client.containers.run(
             "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
+            volume={tmp_path/"bob": {"bind": "/home/indy/.indy_client/wallet/bob", "mode": "rw"}},
             name="bob-sqlite",
             ports={"3001/tcp": 3002},
             environment=["RUST_LOG=TRACE"],
@@ -185,8 +192,8 @@ class TestSqliteDBPW(WalletTypeToBeTested):
             detach=True,
             healthcheck={
                 "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
-                "interval": 7e9,
-                "timeout": 5e9,
+                "interval": int(7e9),
+                "timeout": int(5e9),
                 "retries": 5,
             },
         )
@@ -195,6 +202,23 @@ class TestSqliteDBPW(WalletTypeToBeTested):
 
     @pytest.fixture(scope="class", autouse=True)
     @pytest.mark.asyncio
-    async def migrate(self, connections):
-        # TODO do migration step
-        assert connections
+    async def migrate(self, connections, tmp_path):
+        # bind db volume in agent at start 
+        # stop agent container
+        # migrate db
+        # start agent container
+        # Alice
+        await main(
+            strategy="dbpw",
+            uri=f"sqlite://{tmp_path}/alice/sqlite.db",
+            wallet_name="alice",
+            wallet_key="insecure",
+        )
+
+        # Bob
+        await main(
+            strategy="dbpw",
+            uri=f"sqlite://{tmp_path}/bob/sqlite.db",
+            wallet_name="bob",
+            wallet_key="insecure",
+        )
