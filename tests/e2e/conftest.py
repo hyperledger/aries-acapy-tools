@@ -1,4 +1,6 @@
+from abc import abstractmethod
 import asyncio
+from contextlib import asynccontextmanager, contextmanager
 import shutil
 import time
 from pathlib import Path
@@ -11,7 +13,12 @@ import pytest_asyncio
 from asyncpg import Path
 from controller import Controller
 from controller.models import ConnRecord
-from controller.protocols import didexchange
+from controller.protocols import (
+    didexchange,
+    indy_anoncred_credential_artifacts,
+    indy_anoncred_onboard,
+    indy_issue_credential_v1,
+)
 from docker.models.containers import Container
 
 """async def connections(alice, bob):
@@ -101,12 +108,33 @@ class WalletTypeToBeTested:
 
     @pytest.mark.asyncio
     @pytest.fixture(scope="class")
-    async def connections(self, alice: Controller, bob: Controller):
+    async def pre_migration(self, alice: Controller, bob: Controller):
         print(alice, "\n", bob)
         async with alice, bob:
             alice_conn, bob_conn = await didexchange(alice, bob)
 
-        yield alice_conn, bob_conn
+            await indy_anoncred_onboard(alice)
+            schema, cred_def = await indy_anoncred_credential_artifacts(
+                alice,
+                ["firstname", "lastname"],
+                support_revocation=True,
+            )
+
+            # Issue the thing
+            alice_cred_ex, bob_cred_ex = await indy_issue_credential_v1(
+                alice,
+                bob,
+                alice_conn.connection_id,
+                bob_conn.connection_id,
+                cred_def.credential_definition_id,
+                {"firstname": "Bob", "lastname": "Builder"},
+            )
+
+        yield alice_conn, bob_conn, schema, cred_def, alice_cred_ex
+
+    @pytest.fixture
+    def connections(self, pre_migration: Tuple):
+        yield pre_migration[0:2]
 
     # - Issued revocable credential
     # - Cred def with revocation support
@@ -114,7 +142,7 @@ class WalletTypeToBeTested:
 
     @pytest.mark.asyncio
     @pytest.fixture(scope="class", autouse=True)
-    async def migrate(self, connections):
+    async def migrate(self, pre_migration):
         pass
 
     @pytest.mark.asyncio
@@ -130,47 +158,60 @@ class WalletTypeToBeTested:
 
 
 class TestSqliteDBPW(WalletTypeToBeTested):
-    
     @pytest.fixture(scope="class")
     def alice(self, tails, tmp_path):
-        client = docker.from_env()
-        container = client.containers.run(
-            "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
-            volume={tmp_path/"alice": {"bind": "/home/indy/.indy_client/wallet/alice", "mode": "rw"}},
-            name="alice-sqlite",
-            ports={"3001/tcp": 3001},
-            environment=["RUST_LOG=TRACE"],
-            command="""start -it http 0.0.0.0 3000 
-                --label Alice
-                -ot http
-                -e http://alice-sqlite:3000
-                --admin 0.0.0.0 3001 --admin-insecure-mode
-                --log-level debug
-                --genesis-url https://raw.githubusercontent.com/Indicio-tech/indicio-network/main/genesis_files/pool_transactions_testnet_genesis
-                --tails-server-base-url http://tails:6543
-                --wallet-type indy
-                --wallet-name alice
-                --wallet-key insecure
-                --preserve-exchange-records
-                --auto-provision""",
-            auto_remove=True,
-            detach=True,
-            healthcheck={
-                "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
-                "interval": int(7e9),
-                "timeout": int(5e9),
-                "retries": 5,
-            },
-        )
-        yield Controller("http://alice-sqlite:3001")
-        container.stop()
+        @asynccontextmanager
+        async def _alice():
+            client = docker.from_env()
+            container = client.containers.run(
+                "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
+                volume={
+                    tmp_path
+                    / "alice": {
+                        "bind": "/home/indy/.indy_client/wallet/alice",
+                        "mode": "rw",
+                    }
+                },
+                name="alice-sqlite",
+                ports={"3001/tcp": 3001},
+                environment=["RUST_LOG=TRACE"],
+                command="""start -it http 0.0.0.0 3000 
+                    --label Alice
+                    -ot http
+                    -e http://alice-sqlite:3000
+                    --admin 0.0.0.0 3001 --admin-insecure-mode
+                    --log-level debug
+                    --genesis-url https://raw.githubusercontent.com/Indicio-tech/indicio-network/main/genesis_files/pool_transactions_testnet_genesis
+                    --tails-server-base-url http://tails:6543
+                    --wallet-type indy
+                    --wallet-name alice
+                    --wallet-key insecure
+                    --preserve-exchange-records
+                    --auto-provision""",
+                auto_remove=True,
+                detach=True,
+                healthcheck={
+                    "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
+                    "interval": int(7e9),
+                    "timeout": int(5e9),
+                    "retries": 5,
+                },
+            )
+            async with Controller("http://alice-sqlite:3001") as controller:
+                yield controller
+            container.stop()
+
+        yield _alice
 
     @pytest.fixture(scope="class")
     def bob(self, tails, tmp_path):
         client = docker.from_env()
         container = client.containers.run(
             "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
-            volume={tmp_path/"bob": {"bind": "/home/indy/.indy_client/wallet/bob", "mode": "rw"}},
+            volume={
+                tmp_path
+                / "bob": {"bind": "/home/indy/.indy_client/wallet/bob", "mode": "rw"}
+            },
             name="bob-sqlite",
             ports={"3001/tcp": 3002},
             environment=["RUST_LOG=TRACE"],
@@ -203,7 +244,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
     @pytest.fixture(scope="class", autouse=True)
     @pytest.mark.asyncio
     async def migrate(self, connections, tmp_path):
-        # bind db volume in agent at start 
+        # bind db volume in agent at start
         # stop agent container
         # migrate db
         # start agent container
