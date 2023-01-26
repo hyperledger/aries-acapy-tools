@@ -2,6 +2,7 @@ import base64
 from typing import Optional
 
 from asyncpg import Connection
+import asyncpg
 
 from acapy_wallet_upgrade.error import UpgradeError
 
@@ -28,33 +29,74 @@ class PgMWSTConnection(PgConnection):
 
 
 class PgMWSTStoresConnection(PgMWSTConnection):
+
+    async def connect(self):
+        """Accessor for the connection pool instance."""
+        if not self._conn:
+            self._conn = await self.connect_create_if_not_exists(self.parsed_url)
+
+    async def connect_create_if_not_exists(self, parsed_url):
+        try:
+            parts = parsed_url
+            conn = await asyncpg.connect(
+                host=parts.hostname,
+                port=parts.port or 5432,
+                user=parts.username,
+                password=parts.password,
+                database=parts.path[1:],
+            )
+        except asyncpg.InvalidCatalogNameError:
+            # Database does not exist, create it.
+            sys_conn = await asyncpg.connect(
+                host=parts.hostname,
+                port=parts.port or 5432,
+                user=parts.username,
+                password=parts.password,
+                database='template1',
+            )
+            await sys_conn.execute(
+                f'CREATE DATABASE "{parts.path[1:]}" OWNER "{parts.username}"'
+            )
+            await sys_conn.close()
+
+            # Connect to the newly created database.
+            conn = await asyncpg.connect(
+                host=parts.hostname,
+                port=parts.port or 5432,
+                user=parts.username,
+                password=parts.password,
+                database=parts.path[1:],
+            )
+
+        return conn
+
     async def pre_upgrade(self) -> dict:
         """Add new tables and columns."""
-        if not await self.find_table("metadata"):
-            raise UpgradeError("No metadata table found: not an Indy wallet database")
+        # if not await self.find_table("metadata"):
+        #     raise UpgradeError("No metadata table found: not an Indy wallet database")
 
-        if await self.find_table("config"):
-            stmt = await self._conn.fetch(
+        # if await self.find_table("config"):
+        #     stmt = await self._conn.fetch(
+        #         """
+        #         SELECT name, value FROM config
+        #         """
+        #     )
+        #     config = {}
+        #     if len(stmt) > 0:
+        #         for row in stmt:
+        #             config[row[0]] = row[1]
+        #     return config
+        # else:
+        async with self._conn.transaction():
+            await self._conn.execute(
                 """
-                SELECT name, value FROM config
+                CREATE TABLE config (
+                    name TEXT NOT NULL,
+                    value TEXT,
+                    PRIMARY KEY (name)
+                );
                 """
             )
-            config = {}
-            if len(stmt) > 0:
-                for row in stmt:
-                    config[row[0]] = row[1]
-            return config
-        else:
-            async with self._conn.transaction():
-                await self._conn.execute(
-                    """
-                    CREATE TABLE config (
-                        name TEXT NOT NULL,
-                        value TEXT,
-                        PRIMARY KEY (name)
-                    );
-                    """
-                )
         await self._create_table(
             "profiles",
             """
@@ -66,6 +108,25 @@ class PgMWSTStoresConnection(PgMWSTConnection):
                 PRIMARY KEY (id)
             );
             CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
+            """,
+        )
+        await self._create_table(
+            "items",
+            """
+            CREATE TABLE items (
+                id BIGSERIAL,
+                profile_id BIGINT NOT NULL,
+                kind SMALLINT NOT NULL,
+                category BYTEA NOT NULL,
+                name BYTEA NOT NULL,
+                value BYTEA NOT NULL,
+                expiry TIMESTAMP NULL,
+                PRIMARY KEY(id),
+                FOREIGN KEY (profile_id) REFERENCES profiles (id)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE UNIQUE INDEX ix_items_uniq ON items
+                (profile_id, kind, category, name);
             """,
         )
         await self._create_table(
@@ -196,3 +257,8 @@ class PgMWSTWallet(PgWallet):
                 await self._conn.execute(
                     "DELETE FROM items_old WHERE id IN ($1)", del_ids
                 )
+
+
+class PgMWSTStoresWallet(PgMWSTWallet):
+
+    

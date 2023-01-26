@@ -15,7 +15,7 @@ import msgpack
 import nacl.pwhash
 
 from acapy_wallet_upgrade.error import UpgradeError
-from acapy_wallet_upgrade.pg_mwst_connection import PgMWSTConnection
+from acapy_wallet_upgrade.pg_mwst_connection import PgMWSTConnection, PgMWSTStoresConnection
 
 from .db_connection import DbConnection, Wallet
 from .pg_connection import PgConnection, PgWallet
@@ -561,7 +561,26 @@ class MwstAsStoresStrategy(Strategy):
         parsed = urlparse(self.conn.uri)
         print(parsed)
         new_conn_uri = f"{parsed.scheme}://{parsed.netloc}/{wallet_name}"
-        return PgMWSTConnection(new_conn_uri)
+        return PgMWSTStoresConnection(new_conn_uri)
+
+    async def create_config(self, name: str, indy_key: dict, new_conn_db):
+        pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
+        await new_conn_db.create_config(default_profile=name, key=pass_key)
+
+    async def init_profile(self, wallet: Wallet, name: str, indy_key: dict) -> dict:
+        profile_key = {
+            "ver": "1",
+            "ick": indy_key["type"],
+            "ink": indy_key["name"],
+            "ihk": indy_key["item_hmac"],
+            "tnk": indy_key["tag_name"],
+            "tvk": indy_key["tag_value"],
+            "thk": indy_key["tag_hmac"],
+        }
+
+        enc_pk = self.encrypt_merged(cbor2.dumps(profile_key), indy_key["master"])
+        await wallet.insert_profile(name, enc_pk)
+        return profile_key
 
     async def run(self):
         """Perform the upgrade."""
@@ -572,16 +591,16 @@ class MwstAsStoresStrategy(Strategy):
             await self.conn.connect()
 
             # Connect to new database
-            new_db_conn: PgMWSTConnection = self.create_new_db_connection(wallet_name)
+            new_db_conn: PgMWSTStoresConnection = self.create_new_db_connection(wallet_name)
             await new_db_conn.connect()  # TODO: debug
 
             wallet = self.conn.get_wallet(wallet_name)
+            new_wallet = new_db_conn.get_wallet(wallet_name)
             try:
                 await new_db_conn.pre_upgrade()
                 indy_key = await self.fetch_indy_key(wallet, wallet_key)
-                # TODO: create config and profile on new db connection
-                await self.create_config(wallet_name, indy_key)
-                profile_key = await self.init_profile(
+                await self.conn.create_config(wallet_name, indy_key, new_db_conn)
+                profile_key = await new_db_conn.init_profile(
                     wallet, self.wallet_name, indy_key
                 )
                 await new_db_conn.update_items(wallet, indy_key, profile_key)
