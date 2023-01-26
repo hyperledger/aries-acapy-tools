@@ -1,15 +1,11 @@
-from abc import abstractmethod
 import asyncio
-from contextlib import asynccontextmanager, contextmanager
-import shutil
-import time
+from contextlib import asynccontextmanager, contextmanager, closing
 from pathlib import Path
-from acapy_wallet_upgrade.__main__ import main
-from typing import Callable, Tuple, cast
+import shutil
+import socket
+import time
+from typing import Callable, cast
 
-import docker
-import pytest
-import pytest_asyncio
 from asyncpg import Path
 from controller import Controller
 from controller.models import ConnRecord
@@ -19,7 +15,12 @@ from controller.protocols import (
     indy_anoncred_onboard,
     indy_issue_credential_v1,
 )
+import docker
 from docker.models.containers import Container
+import pytest
+import pytest_asyncio
+
+from acapy_wallet_upgrade.__main__ import main
 
 """async def connections(alice, bob):
     alice_conn, bob_conn = await didexchange(alice, bob)
@@ -31,6 +32,13 @@ from docker.models.containers import Container
 
 
 class WalletTypeToBeTested:
+    @pytest.fixture(scope="class")
+    def event_loop(self):
+        policy = asyncio.get_event_loop_policy()
+        loop = policy.new_event_loop()
+        yield loop
+        loop.close()
+
     @pytest.fixture(scope="class")
     def tails(self):
         client = docker.from_env()
@@ -60,7 +68,18 @@ class WalletTypeToBeTested:
     def bob(self, tails):
         pass
 
-    @pytest.fixture
+    def poll_acapy_until_healthy(
+        self, container: Container, port: int, attempts: int = 5
+    ):
+        for _ in range(attempts):
+            exit_code, _ = container.exec_run(
+                f"curl -s -o /dev/null -w '%{{http_code}}' 'http://localhost:{port}/status/live' | grep '200' > /dev/null"
+            )
+            if exit_code == 0:
+                break
+            else:
+                time.sleep(1)
+
     def poll_until_pg_is_ready(self, container: Container, attempts: int = 5):
         for _ in range(attempts):
             exit_code, _ = container.exec_run("pg_isready")
@@ -101,21 +120,22 @@ class WalletTypeToBeTested:
         for container in containers:
             container.stop()
 
-    @pytest.mark.asyncio
-    @pytest.fixture(scope="class")
-    async def pre_migration(self, alice: Controller, bob: Controller):
+    @pytest_asyncio.fixture(scope="class")
+    async def pre_migration(self, alice: Callable[[], Controller], bob: Controller):
         print(alice, "\n", bob)
         alice_state = {}
         bob_state = {}
-        async with alice, bob:
-            alice_state["conn"], bob_state["conn"] = await didexchange(alice, bob)
+        async with alice() as alice_controller, bob:
+            alice_state["conn"], bob_state["conn"] = await didexchange(
+                alice_controller, bob
+            )
 
-            alice_state["public_did"] = await indy_anoncred_onboard(alice)
+            alice_state["public_did"] = await indy_anoncred_onboard(alice_controller)
             (
                 alice_state["schema"],
                 alice_state["cred_def"],
             ) = await indy_anoncred_credential_artifacts(
-                alice,
+                alice_controller,
                 ["firstname", "lastname"],
                 support_revocation=True,
             )
@@ -125,7 +145,7 @@ class WalletTypeToBeTested:
                 alice_state["cred_ex"],
                 bob_state["cred_ex"],
             ) = await indy_issue_credential_v1(
-                alice,
+                alice_controller,
                 bob,
                 alice_state["conn"].connection_id,
                 bob_state["conn"].connection_id,
@@ -135,14 +155,13 @@ class WalletTypeToBeTested:
 
         yield alice_state, bob_state
 
-    @pytest.mark.asyncio
-    @pytest.fixture(scope="class", autouse=True)
+    @pytest_asyncio.fixture(scope="class", autouse=True)
     async def migrate(self, pre_migration):
         pass
 
     @pytest.mark.asyncio
     async def test_connections(self, alice: Controller, bob: Controller, pre_migration):
-        async with alice, bob:
+        async with alice(), bob:
             # TODO: trust ping over connection
             alice_state, bob_state = pre_migration
             print(alice_state, bob_state)
@@ -173,7 +192,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
                 name="alice-sqlite",
                 ports={"3001/tcp": 3001},
                 environment=["RUST_LOG=TRACE"],
-                command="""start -it http 0.0.0.0 3000 
+                command="""start -it http 0.0.0.0 3000
                     --label Alice
                     -ot http
                     -e http://alice-sqlite:3000
@@ -189,12 +208,13 @@ class TestSqliteDBPW(WalletTypeToBeTested):
                 auto_remove=True,
                 detach=True,
                 healthcheck={
-                    "test": "curl -s -o /dev/null -w 'http://localhost:3001/status/live' | grep '200' > /dev/null",
+                    "test": "curl -s -o /dev/null -w '%{http_code}' 'http://localhost:3001/status/live' | grep '200' > /dev/null",
                     "interval": int(7e9),
                     "timeout": int(5e9),
                     "retries": 5,
                 },
             )
+            self.poll_acapy_until_healthy(container, 3001)
             async with Controller("http://alice-sqlite:3001") as controller:
                 yield controller
             container.stop()
@@ -213,7 +233,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
             name="bob-sqlite",
             ports={"3001/tcp": 3002},
             environment=["RUST_LOG=TRACE"],
-            command="""start -it http 0.0.0.0 3000 
+            command="""start -it http 0.0.0.0 3000
                 --label Bob
                 -ot http
                 -e http://bob-sqlite:3000
@@ -239,8 +259,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
         yield Controller("http://bob-sqlite:3001")
         container.stop()
 
-    @pytest.fixture(scope="class", autouse=True)
-    @pytest.mark.asyncio
+    @pytest_asyncio.fixture(scope="class", autouse=True)
     async def migrate(self, pre_migration, tmp_path_factory):
         # bind db volume in agent at start
         # stop agent container
