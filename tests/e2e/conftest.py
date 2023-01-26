@@ -79,17 +79,12 @@ class WalletTypeToBeTested:
         client = docker.from_env()
         containers = []
 
-        def _postgres_with_volume(volume_name: str):
-            src = Path(__file__).parent / "input" / volume_name
-            d = tmp_path / "sub"
-            d.mkdir()
-            dst = d / volume_name
-            shutil.copytree(src, dst)
+        def _postgres_with_volume():
 
             port = unused_tcp_port_factory()
             container = client.containers.run(
                 "postgres:11",
-                volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw,z"}},
+                # volumes={dst: {"bind": "/var/lib/postgresql/data", "mode": "rw,z"}},
                 ports={"5432/tcp": port},
                 environment=["POSTGRES_PASSWORD=mysecretpassword"],
                 auto_remove=True,
@@ -110,35 +105,35 @@ class WalletTypeToBeTested:
     @pytest.fixture(scope="class")
     async def pre_migration(self, alice: Controller, bob: Controller):
         print(alice, "\n", bob)
+        alice_state = {}
+        bob_state = {}
         async with alice, bob:
-            alice_conn, bob_conn = await didexchange(alice, bob)
+            alice_state["conn"], bob_state["conn"] = await didexchange(alice, bob)
 
-            await indy_anoncred_onboard(alice)
-            schema, cred_def = await indy_anoncred_credential_artifacts(
+            alice_state["public_did"] = await indy_anoncred_onboard(alice)
+            (
+                alice_state["schema"],
+                alice_state["cred_def"],
+            ) = await indy_anoncred_credential_artifacts(
                 alice,
                 ["firstname", "lastname"],
                 support_revocation=True,
             )
 
             # Issue the thing
-            alice_cred_ex, bob_cred_ex = await indy_issue_credential_v1(
+            (
+                alice_state["cred_ex"],
+                bob_state["cred_ex"],
+            ) = await indy_issue_credential_v1(
                 alice,
                 bob,
-                alice_conn.connection_id,
-                bob_conn.connection_id,
-                cred_def.credential_definition_id,
+                alice_state["conn"].connection_id,
+                bob_state["conn"].connection_id,
+                alice_state["cred_def"].credential_definition_id,
                 {"firstname": "Bob", "lastname": "Builder"},
             )
 
-        yield alice_conn, bob_conn, schema, cred_def, alice_cred_ex
-
-    @pytest.fixture
-    def connections(self, pre_migration: Tuple):
-        yield pre_migration[0:2]
-
-    # - Issued revocable credential
-    # - Cred def with revocation support
-    # - Public DID
+        yield alice_state, bob_state
 
     @pytest.mark.asyncio
     @pytest.fixture(scope="class", autouse=True)
@@ -146,30 +141,33 @@ class WalletTypeToBeTested:
         pass
 
     @pytest.mark.asyncio
-    async def test_connections(
-        self,
-        alice: Controller,
-        bob: Controller,
-        connections: Tuple[ConnRecord, ConnRecord],
-    ):
+    async def test_connections(self, alice: Controller, bob: Controller, pre_migration):
         async with alice, bob:
-            print(connections)
-            assert True
+            # TODO: trust ping over connection
+            alice_state, bob_state = pre_migration
+            print(alice_state, bob_state)
+            assert False
+
+    # TODO: test present credential
+    # TODO: test public key
+    # TODO: test issue credential
+    # TODO: test
 
 
 class TestSqliteDBPW(WalletTypeToBeTested):
+    @pytest.mark.asyncio
     @pytest.fixture(scope="class")
-    def alice(self, tails, tmp_path):
+    def alice(self, tails, tmp_path_factory):
         @asynccontextmanager
         async def _alice():
             client = docker.from_env()
+            _dir = tmp_path_factory.mktemp("alice")
             container = client.containers.run(
                 "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
-                volume={
-                    tmp_path
-                    / "alice": {
+                volumes={
+                    _dir: {
                         "bind": "/home/indy/.indy_client/wallet/alice",
-                        "mode": "rw",
+                        "mode": "rw,z",
                     }
                 },
                 name="alice-sqlite",
@@ -204,13 +202,13 @@ class TestSqliteDBPW(WalletTypeToBeTested):
         yield _alice
 
     @pytest.fixture(scope="class")
-    def bob(self, tails, tmp_path):
+    def bob(self, tails, tmp_path_factory):
         client = docker.from_env()
+        _dir = tmp_path_factory.mktemp("bob")
         container = client.containers.run(
             "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5",
-            volume={
-                tmp_path
-                / "bob": {"bind": "/home/indy/.indy_client/wallet/bob", "mode": "rw"}
+            volumes={
+                _dir: {"bind": "/home/indy/.indy_client/wallet/bob", "mode": "rw,z"}
             },
             name="bob-sqlite",
             ports={"3001/tcp": 3002},
@@ -243,12 +241,13 @@ class TestSqliteDBPW(WalletTypeToBeTested):
 
     @pytest.fixture(scope="class", autouse=True)
     @pytest.mark.asyncio
-    async def migrate(self, connections, tmp_path):
+    async def migrate(self, pre_migration, tmp_path_factory):
         # bind db volume in agent at start
         # stop agent container
         # migrate db
         # start agent container
         # Alice
+        tmp_path = tmp_path_factory.getbasetemp()
         await main(
             strategy="dbpw",
             uri=f"sqlite://{tmp_path}/alice/sqlite.db",
