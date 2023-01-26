@@ -14,12 +14,9 @@ import cbor2
 import msgpack
 import nacl.pwhash
 
-from acapy_wallet_upgrade.error import UpgradeError
-from acapy_wallet_upgrade.pg_mwst_connection import (
-    PgMWSTConnection,
-    PgMWSTStoresConnection,
-)
-
+from .error import UpgradeError
+from .pg_mwst_connection import PgMWSTConnection
+from .pg_mwst_stores_connection import PgMWSTStoresConnection
 from .db_connection import DbConnection, Wallet
 from .pg_connection import PgConnection, PgWallet
 from .sqlite_connection import SqliteConnection
