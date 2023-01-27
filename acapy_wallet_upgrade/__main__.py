@@ -32,7 +32,7 @@ def config():
     parser.add_argument("--allow-missing-wallet", type=str, action="store")
     args, _ = parser.parse_known_args(sys.argv[1:])
 
-    if args.strategy not in ("dpbw", "mwst-as-profiles", "mwst-as-stores"):
+    if args.strategy not in ("dbpw", "mwst-as-profiles", "mwst-as-stores"):
         raise ValueError(
             "Strategy must be one of: dbpw, mwst-as-profiles, mwst-as-stores"
         )
