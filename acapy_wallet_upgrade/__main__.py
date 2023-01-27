@@ -10,8 +10,9 @@ from urllib.parse import urlparse
 from .error import UpgradeError
 from .pg_connection import PgConnection
 from .pg_mwst_connection import PgMWSTConnection
+from .pg_mwst_stores_connection import PgMWSTStoresConnection
 from .sqlite_connection import SqliteConnection
-from .strategies import DbpwStrategy, MwstAsProfilesStrategy
+from .strategies import DbpwStrategy, MwstAsProfilesStrategy, MwstAsStoresStrategy
 
 
 def config():
@@ -28,6 +29,7 @@ def config():
     parser.add_argument("--wallet-key", type=str, action="store")
     parser.add_argument("--base-wallet-name", type=str, action="store")
     parser.add_argument("--wallet-keys", type=str, action="store")
+    parser.add_argument("--allow-missing-wallet", type=str, action="store")
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     if args.strategy not in ("dpbw", "mwst-as-profiles", "mwst-as-stores"):
@@ -65,6 +67,7 @@ async def main(
     wallet_key: Optional[str] = None,
     base_wallet_name: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
+    allow_missing_wallet: Optional[bool] = None,
 ):
     logging.basicConfig(level=logging.WARN)
     parsed = urlparse(uri)
@@ -93,7 +96,9 @@ async def main(
             raise ValueError("Wallet keys required for mwst-as-profiles strategy")
 
         conn = PgMWSTConnection(uri)
-        strategy_inst = MwstAsProfilesStrategy(conn, base_wallet_name, wallet_keys)
+        strategy_inst = MwstAsProfilesStrategy(
+            conn, base_wallet_name, wallet_keys, allow_missing_wallet
+        )
 
     elif strategy == "mwst-as-stores":
         if parsed.scheme != "postgres":
@@ -102,8 +107,8 @@ async def main(
         if not wallet_keys:
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
-        conn = PgMWSTConnection(uri)
-        raise NotImplementedError("TODO")
+        conn = PgMWSTStoresConnection(uri)
+        strategy_inst = MwstAsStoresStrategy(conn, wallet_keys, allow_missing_wallet)
 
     else:
         raise UpgradeError("Invalid strategy")

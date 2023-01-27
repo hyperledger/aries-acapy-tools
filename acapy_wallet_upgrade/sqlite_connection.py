@@ -31,7 +31,7 @@ class SqliteConnection(DbConnection):
         )
         return (await found.fetchone())[0]
 
-    async def pre_upgrade(self) -> dict:
+    async def pre_upgrade(self):
         """Add new tables and columns."""
 
         if not await self.find_table("metadata"):
@@ -98,7 +98,6 @@ class SqliteConnection(DbConnection):
             COMMIT;
         """,
         )
-        return {}
 
     async def create_config(self, default_profile: str, key: str):
         """Insert the initial profile."""
@@ -159,18 +158,22 @@ class SqliteWallet(Wallet):
 
     async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items."""
-        stmt = await self._conn.execute(
-            """
-            SELECT i.id, i.type, i.name, i.value, i.key,
-            (SELECT GROUP_CONCAT(HEX(te.name) || ':' || HEX(te.value))
-                FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
-            (SELECT GROUP_CONCAT(HEX(tp.name) || ':' || HEX(tp.value))
-                FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
-            FROM items_old i LIMIT ?1
-            """,
-            (limit,),
-        )
-        return await stmt.fetchall()
+        while True:
+            stmt = await self._conn.execute(
+                """
+                SELECT i.id, i.type, i.name, i.value, i.key,
+                (SELECT GROUP_CONCAT(HEX(te.name) || ':' || HEX(te.value))
+                    FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
+                (SELECT GROUP_CONCAT(HEX(tp.name) || ':' || HEX(tp.value))
+                    FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
+                FROM items_old i LIMIT ?1
+                """,
+                (limit,),
+            )
+            rows = await stmt.fetchall()
+            if not rows:
+                break
+            yield rows
 
     async def update_items(self, items):
         """Update items in the database."""

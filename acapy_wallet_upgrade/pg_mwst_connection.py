@@ -3,8 +3,7 @@ from typing import Optional
 
 from asyncpg import Connection
 
-from acapy_wallet_upgrade.error import UpgradeError
-
+from .error import UpgradeError, MissingWalletError
 from .pg_connection import PgConnection, PgWallet
 
 
@@ -14,14 +13,34 @@ class PgMWSTConnection(PgConnection):
 
     DB_TYPE = "pgsql_mwst"
 
-    async def find_wallet_ids(self) -> set:
-        """Retrieve set of wallet ids."""
+    async def check_wallet_alignment(self, wallet_keys):
+        """Verify that the wallet names passed in align with
+        the wallet names found in the database.
+        """
         wallet_id_list = await self._conn.fetch(
             """
             SELECT wallet_id FROM metadata
             """
         )
-        return set(wallet_id[0] for wallet_id in wallet_id_list)
+        retrieved_wallet_keys = [wallet_id[0] for wallet_id in wallet_id_list]
+
+        for wallet_id in wallet_keys.keys():
+            if wallet_id not in retrieved_wallet_keys:
+                raise UpgradeError(f"Wallet {wallet_id} not found in database")
+        for wallet_id in retrieved_wallet_keys:
+            if wallet_id not in wallet_keys.keys():
+                raise MissingWalletError(
+                    f"Must provide entry for {wallet_id} in wallet_keys dictionary to migrate wallet"
+                )
+
+    async def check_missing_wallet_flag(self, wallet_keys, allow_missing_wallet):
+        if allow_missing_wallet:
+            try:
+                await self.check_wallet_alignment(wallet_keys)
+            except MissingWalletError:
+                print("Running upgrade without migrating all wallets")
+        else:
+            await self.check_wallet_alignment(wallet_keys)
 
     def get_wallet(self, wallet_id: str) -> "PgMWSTWallet":
         return PgMWSTWallet(self._conn, wallet_id)
@@ -74,18 +93,22 @@ class PgMWSTWallet(PgWallet):
 
     async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items by wallet_id."""
-        return await self._conn.fetch(
-            """
-            SELECT i.id, i.type, i.name, i.value, i.key,
-            (SELECT string_agg(encode(te.name::bytea, 'hex') || ':' || encode(te.value::bytea, 'hex')::text, ',')
-                FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
-            (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
-                FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
-            FROM items_old i WHERE i.wallet_id = $2 LIMIT $1;
-            """,  # noqa
-            limit,
-            self._wallet_id,
-        )
+        while True:
+            stmt = await self._conn.fetch(
+                """
+                SELECT i.id, i.type, i.name, i.value, i.key,
+                (SELECT string_agg(encode(te.name::bytea, 'hex') || ':' || encode(te.value::bytea, 'hex')::text, ',')
+                    FROM tags_encrypted te WHERE te.item_id = i.id) AS tags_enc,
+                (SELECT string_agg(encode(tp.name::bytea, 'hex') || ':' || encode(tp.value::bytea, 'hex')::text, ',')
+                    FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
+                FROM items_old i WHERE i.wallet_id = $2 LIMIT $1;
+                """,  # noqa
+                limit,
+                self._wallet_id,
+            )
+            if not stmt:
+                break
+            yield stmt
 
     async def update_items(self, items):
         """Update items in the database."""
