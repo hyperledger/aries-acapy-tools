@@ -131,6 +131,7 @@ class Containers:
             command=command,
             auto_remove=True,
             detach=True,
+            user=0,
             network=self.network.name,
             healthcheck={
                 "test": "curl -s -o /dev/null -w '%{http_code}' 'http://localhost:3001/status/live' | grep '200' > /dev/null",
@@ -148,7 +149,8 @@ class Containers:
         wallet_key: str,
         admin_port: int,
         wallet_type: str,
-        volume_path: str,
+        volume_src: str,
+        volume_dst: str,
     ) -> Container:
         """Create an acapy container for use with a sqlite DB."""
         return self.acapy(
@@ -170,8 +172,8 @@ class Containers:
                     --auto-provision
             """,
             volumes={
-                volume_path: {
-                    "bind": f"/home/indy/.indy_client/wallet/{name}",
+                volume_src: {
+                    "bind": volume_dst,
                     "mode": "rw,z",
                 }
             },

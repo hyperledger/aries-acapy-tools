@@ -36,13 +36,23 @@ class TestSqliteDBPW(WalletTypeToBeTested):
         # Pre condition
         alice_volume_path = tmp_path_factory.mktemp("alice")
         alice_container = containers.acapy_sqlite(
-            "alice", "insecure", 3001, "indy", alice_volume_path
+            "alice",
+            "insecure",
+            3001,
+            "indy",
+            alice_volume_path,
+            "/home/indy/.indy_client/wallet/alice",
         )
         containers.wait_until_healthy(alice_container)
 
         bob_volume_path = tmp_path_factory.mktemp("bob")
         bob_container = containers.acapy_sqlite(
-            "bob", "insecure", 3002, "indy", bob_volume_path
+            "bob",
+            "insecure",
+            3002,
+            "indy",
+            bob_volume_path,
+            "/home/indy/.indy_client/wallet/bob",
         )
         containers.wait_until_healthy(bob_container)
 
@@ -57,29 +67,38 @@ class TestSqliteDBPW(WalletTypeToBeTested):
         containers.stop(bob_container)
 
         # Migrate
-        tmp_path = tmp_path_factory.getbasetemp()
         await main(
             strategy="dbpw",
-            uri=f"sqlite://{tmp_path}/alice/alice/sqlite.db",
+            uri=f"sqlite://{alice_volume_path}/sqlite.db",
             wallet_name="alice",
             wallet_key="insecure",
         )
 
         await main(
             strategy="dbpw",
-            uri=f"sqlite://{tmp_path}/bob/bob/sqlite.db",
+            uri=f"sqlite://{bob_volume_path}/sqlite.db",
             wallet_name="bob",
             wallet_key="insecure",
         )
 
         # Post condition
         alice_container = containers.acapy_sqlite(
-            "alice", "insecure", 3001, "askar", alice_volume_path
+            "alice",
+            "insecure",
+            3001,
+            "askar",
+            alice_volume_path,
+            "/home/indy/.aries_cloudagent/wallet/alice",
         )
         containers.wait_until_healthy(alice_container)
 
         bob_container = containers.acapy_sqlite(
-            "bob", "insecure", 3002, "askar", bob_volume_path
+            "bob",
+            "insecure",
+            3002,
+            "askar",
+            bob_volume_path,
+            "/home/indy/.aries_cloudagent/wallet/bob",
         )
         containers.wait_until_healthy(bob_container)
 

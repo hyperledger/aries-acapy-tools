@@ -23,7 +23,10 @@ class MigrationTestCases:
 
     async def post(self, alice: Controller, bob: Controller):
         for case in self._cases:
-            await case.asend((alice, bob))
+            try:
+                await case.asend((alice, bob))
+            except StopAsyncIteration:
+                pass
 
     async def connections(self) -> AsyncGenerator[None, Tuple[Controller, Controller]]:
         alice, bob = yield
@@ -31,7 +34,7 @@ class MigrationTestCases:
 
         alice, bob = yield
 
-        await alice.post(f"/connections/{alice_conn.connection_id}/trustping")
+        await alice.post(f"/connections/{alice_conn.connection_id}/send-ping")
 
     async def credentials(self) -> AsyncGenerator[None, Tuple[Controller, Controller]]:
         alice, bob = yield
