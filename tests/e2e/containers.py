@@ -61,13 +61,14 @@ class Containers:
         inspect_results = self.client.api.inspect_container(container.name)
         return inspect_results["State"]["Health"]["Status"] == "healthy"
 
-    def wait_until_healthy(self, container: Container, attempts: int = 5):
+    def wait_until_healthy(self, container: Container, attempts: int = 350):
         """Wait until container is healthy."""
         for _ in range(attempts):
             if self.healthy(container):
-                break
+                return
             else:
                 time.sleep(1)
+        raise TimeoutError("Timed out waiting for container")
 
     def stop(self, container: Container):
         """Stop a container and remove it from the container manager state."""
