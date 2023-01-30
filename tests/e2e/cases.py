@@ -59,12 +59,12 @@ class MigrationTestCases:
 
         alice, bob = yield
 
-        bob_pres_ex, alice_pres_ex = await indy_present_proof_v1(
+        _, alice_pres_ex_askar = await indy_present_proof_v1(
             bob,
             alice,
             bob_conn.connection_id,
             alice_conn.connection_id,
             requested_attributes=[{"name": "firstname"}],
         )
-        assert alice_pres_ex.state == "verified"
-        assert alice_pres_ex.verified == "true"
+        assert alice_pres_ex_askar.state == "verified"
+        assert alice_pres_ex_askar.verified == "true"

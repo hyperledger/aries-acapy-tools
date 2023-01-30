@@ -302,10 +302,11 @@ class Strategy(ABC):
                         await txn.remove(
                             "Indy::CredentialDefinitionPrivateKey", priv.name
                         )
+                        value = json.loads(priv.value)["value"]
                         await txn.insert(
                             "credential_def_private",
                             priv.name,
-                            value=priv.value,
+                            value_json=value,
                         )
                     proof = await txn.fetch(
                         "Indy::CredentialDefinitionCorrectnessProof", row.name
@@ -314,10 +315,11 @@ class Strategy(ABC):
                         await txn.remove(
                             "Indy::CredentialDefinitionCorrectnessProof", proof.name
                         )
+                        value = json.loads(proof.value)["value"]
                         await txn.insert(
                             "credential_def_key_proof",
                             proof.name,
-                            value=proof.value,
+                            value_json=value,
                         )
                     upd_count += 1
 
