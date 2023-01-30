@@ -427,13 +427,13 @@ class Strategy(ABC):
             "schema_version": schema_id_parts[3],
             "issuer_did": cdef_id_parts[1],
             "cred_def_id": cred_def_id,
-            "rev_reg_id": cred_data.get("rev_reg_id", "None"),
+            "rev_reg_id": cred_data.get("rev_reg_id"),
         }
         for k, attr_value in cred_data["values"].items():
             attr_name = k.replace(" ", "")
             tags[f"attr::{attr_name}::value"] = attr_value["raw"]
 
-        return tags
+        return {k: v for k, v in tags.items() if v is not None}
 
     async def create_config(self, name: str, indy_key: dict):
         pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
