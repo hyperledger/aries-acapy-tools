@@ -180,21 +180,13 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
         # Pre condition
         postgres = containers.postgres(5432)
         agency_container = containers.acapy_postgres(
-            "agency", "agency_insecure0", 3003, "indy", postgres, mwst=True
-        )
-        alice_container = containers.acapy_postgres(
-            "alice", "alice_insecure1", 3001, "indy", postgres, mwst=True
-        )
-        bob_container = containers.acapy_postgres(
-            "bob", "bob_insecure1", 3002, "indy", postgres, mwst=True
+            "agency", "agency_insecure0", 3001, "indy", postgres, mwst=True, mt=True,
         )
         containers.wait_until_healthy(agency_container)
-        containers.wait_until_healthy(alice_container)
-        containers.wait_until_healthy(bob_container)
 
         test_cases = MigrationTestCases()
 
-        async with Controller("http://agency:3003") as agency:
+        async with Controller("http://agency:3001") as agency:
             alice_wallet = await agency.post(
                 "/multitenancy/wallet",
                 json={
@@ -217,19 +209,18 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
             )
 
             async with Controller(
-                "http://agency:3003",
+                "http://agency:3000",
                 wallet_id=alice_wallet.wallet_id,
                 subwallet_token=alice_wallet.token,
             ) as alice, Controller(
-                "http://agency:3003",
+                "http://agency:3000",
                 wallet_id=bob_wallet.wallet_id,
                 subwallet_token=bob_wallet.token,
             ) as bob:
-                await test_cases.pre(agency, alice, bob)
+                await test_cases.pre(alice, bob)
 
         # Prepare for migration
-        containers.stop(alice_container)
-        containers.stop(bob_container)
+        containers.stop(agency_container)
 
         # Migrate
         await main(
@@ -245,22 +236,14 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
 
         # Post condition
         agency_container = containers.acapy_postgres(
-            "agency", "agency_insecure0", 3003, "askar", postgres, mwst=True
-        )
-        alice_container = containers.acapy_postgres(
-            "alice", "alice_insecure1", 3003, "askar", postgres, mwst=True
-        )
-        bob_container = containers.acapy_postgres(
-            "bob", "bob_insecure1", 3003, "askar", postgres, mwst=True
+            "agency", "agency_insecure0", 3001, "askar", postgres, mwst=True, mt=True,
         )
         containers.wait_until_healthy(agency_container)
-        containers.wait_until_healthy(alice_container)
-        containers.wait_until_healthy(bob_container)
 
-        async with Controller("http://agency:3003") as agency, Controller(
-            "http://agency:3003"
-        ) as alice, Controller("http://agency:3003") as bob:
-            await test_cases.post(agency, alice, bob)
+        async with Controller("http://agency:3001") as agency, Controller(
+            "http://agency:3001"
+        ) as alice, Controller("http://agency:3001") as bob:
+            await test_cases.post(alice, bob)
 
 
 class TestPgMWSTStores(WalletTypeToBeTested):
