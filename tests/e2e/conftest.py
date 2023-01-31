@@ -185,8 +185,7 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
         containers.wait_until_healthy(agency_container)
 
         test_cases = MigrationTestCases()
-
-        async with Controller("http://agency:3001") as agency:
+        async with Controller("http://localhost:3001") as agency:
             alice_wallet = await agency.post(
                 "/multitenancy/wallet",
                 json={
@@ -209,11 +208,11 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
             )
 
             async with Controller(
-                "http://agency:3000",
+                "http://localhost:3001",
                 wallet_id=alice_wallet.wallet_id,
                 subwallet_token=alice_wallet.token,
             ) as alice, Controller(
-                "http://agency:3000",
+                "http://localhost:3001",
                 wallet_id=bob_wallet.wallet_id,
                 subwallet_token=bob_wallet.token,
             ) as bob:
@@ -240,9 +239,15 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
         )
         containers.wait_until_healthy(agency_container)
 
-        async with Controller("http://agency:3001") as agency, Controller(
-            "http://agency:3001"
-        ) as alice, Controller("http://agency:3001") as bob:
+        async with Controller(
+            "http://localhost:3001",
+            wallet_id=alice_wallet.wallet_id,
+            subwallet_token=alice_wallet.token,
+        ) as alice, Controller(
+            "http://localhost:3001",
+            wallet_id=bob_wallet.wallet_id,
+            subwallet_token=bob_wallet.token,
+        ) as bob:
             await test_cases.post(alice, bob)
 
 
