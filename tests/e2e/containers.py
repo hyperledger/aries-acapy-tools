@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 import time
 from typing import Optional, cast
 
@@ -13,6 +15,7 @@ class Containers:
     NETWORK_NAME = "migration-testing"
     TAILS_NAME = "tails"
     TAILS_IMAGE = "ghcr.io/bcgov/tails-server:latest"
+    FIX_PERMISSIONS_IMAGE = "alpine:3.17.1"
     POSTGRES_IMAGE = "postgres:11"
     POSTGRES_USER = "postgres"
     POSTGRES_PASSWORD = "mysecretpassword"
@@ -55,6 +58,26 @@ class Containers:
 
         if errors:
             raise Exception("Errors during teardown: {}".format(errors))
+
+    def fix_permissions(
+        self, path: Path, user: Optional[int] = None, group: Optional[int] = None
+    ):
+        """Fix permissions of files created by a container."""
+        # Special case for podman user namespace mapping
+        if os.stat(path).st_uid > 100000:
+            user = 0
+            group = 0
+
+        user = user if user is not None else os.getuid()
+        group = group if group is not None else os.getgid()
+        container = self.client.containers.run(
+            self.FIX_PERMISSIONS_IMAGE,
+            command=f"chown -R {user}:{group} /target",
+            volumes={path: {"bind": "/target", "mode": "rw,z"}},
+            auto_remove=True,
+            detach=True,
+        )
+        container.wait()
 
     def healthy(self, container: Container) -> bool:
         """Check if container is healthy."""
@@ -132,7 +155,6 @@ class Containers:
             command=command,
             auto_remove=True,
             detach=True,
-            user=0,
             network=self.network.name,
             healthcheck={
                 "test": "curl -s -o /dev/null -w '%{http_code}' 'http://localhost:3001/status/live' | grep '200' > /dev/null",
