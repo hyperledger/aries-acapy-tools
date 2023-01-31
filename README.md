@@ -159,3 +159,11 @@ askar-upgrade --strategy mwst-as-profiles --uri postgres://<username>:<password>
 #### --allow-missing-wallet check
 
 There is a check to ensure that the wallet names passed into the migration script align with the wallet names retrieved from the database to be migrated. If a wallet name is passed in that does not correspond to an existing wallet in the database, an `UpgradeError` is raised. If a wallet name that corresponds to an existing wallet in the database is not passed into the script to be migrated, a `MissingWalletError` is raised. If the user wishes to migrate some, but not all, of the wallets in a `MultiWalletSingleTable` database, they can bypass the `MissingWalletError` by setting the `--allow-missing-wallet` argument as `True`.
+
+## Wallet location
+
+Indy-SDK and Askar store their wallets inside different directories:
+- Indy-SDK: `/home/<user>/.indy_client/wallet/<wallet name>`
+- Askar: `/home/<user>/.aries_cloudagent/wallet/<wallet name>`
+
+It is left to the user to move their wallet(s) into the desired location.
