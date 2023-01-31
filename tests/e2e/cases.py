@@ -1,3 +1,4 @@
+import time
 from typing import AsyncGenerator, Tuple
 from controller import Controller
 from controller.protocols import (
@@ -46,9 +47,8 @@ class MigrationTestCases:
             ["firstname", "lastname"],
             support_revocation=True,
         )
-
         # Issue the thing
-        alice_cred_ex, bob_cred_ex = await indy_issue_credential_v1(
+        await indy_issue_credential_v1(
             alice,
             bob,
             alice_conn.connection_id,
@@ -59,12 +59,15 @@ class MigrationTestCases:
 
         alice, bob = yield
 
+        now = int(time.time())
         _, alice_pres_ex_askar = await indy_present_proof_v1(
             bob,
             alice,
             bob_conn.connection_id,
             alice_conn.connection_id,
-            requested_attributes=[{"name": "firstname"}],
+            requested_attributes=[
+                {"name": "firstname", "non_revoked": {"to": now, "from": now}}
+            ],
         )
         assert alice_pres_ex_askar.state == "verified"
         assert alice_pres_ex_askar.verified == "true"

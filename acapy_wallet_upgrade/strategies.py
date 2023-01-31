@@ -222,8 +222,7 @@ class Strategy(ABC):
                 else:
                     row = ms[0]
                     await txn.remove("Indy::MasterSecret", row.name)
-                    value = json.loads(row.value)["value"]
-                    await txn.insert("master_secret", row.name, value_json=value)
+                    await txn.insert("master_secret", "default", value=row.value)
                     upd_count += 1
                 await txn.commit()
         print(f" {upd_count} updated")
@@ -305,11 +304,10 @@ class Strategy(ABC):
                         await txn.remove(
                             "Indy::CredentialDefinitionPrivateKey", priv.name
                         )
-                        value = json.loads(priv.value)["value"]
                         await txn.insert(
                             "credential_def_private",
                             priv.name,
-                            value_json=value,
+                            value=priv.value,
                         )
                     proof = await txn.fetch(
                         "Indy::CredentialDefinitionCorrectnessProof", row.name
@@ -429,13 +427,13 @@ class Strategy(ABC):
             "schema_version": schema_id_parts[3],
             "issuer_did": cdef_id_parts[1],
             "cred_def_id": cred_def_id,
-            "rev_reg_id": cred_data.get("rev_reg_id"),
+            "rev_reg_id": cred_data.get("rev_reg_id") or "None",
         }
         for k, attr_value in cred_data["values"].items():
             attr_name = k.replace(" ", "")
             tags[f"attr::{attr_name}::value"] = attr_value["raw"]
 
-        return {k: v for k, v in tags.items() if v is not None}
+        return tags
 
     async def create_config(self, name: str, indy_key: dict):
         pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
