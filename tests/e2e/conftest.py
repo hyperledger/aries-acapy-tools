@@ -36,6 +36,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
     async def test_migrate(self, containers: Containers, tmp_path_factory):
         # Pre condition
         alice_volume_path = tmp_path_factory.mktemp("alice")
+        alice_volume_path.chmod(0o777)
         alice_container = containers.acapy_sqlite(
             "alice",
             "insecure",
@@ -45,6 +46,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
             "/home/indy/.indy_client/wallet/alice",
         )
         bob_volume_path = tmp_path_factory.mktemp("bob")
+        bob_volume_path.chmod(0o777)
         bob_container = containers.acapy_sqlite(
             "bob",
             "insecure",
@@ -62,10 +64,15 @@ class TestSqliteDBPW(WalletTypeToBeTested):
         ) as bob:
             await test_cases.pre(alice, bob)
 
+        alice_container.exec_run("chmod -R 0777 ~/.indy_client")
+        bob_container.exec_run("chmod -R 0777 ~/.indy_client")
+
         # Prepare for migration
         containers.stop(alice_container)
         containers.stop(bob_container)
 
+        # (alice_volume_path / "sqlite.db").chmod(0o777)
+        # (bob_volume_path / "sqlite.db").chmod(0o777)
         # Migrate
         await main(
             strategy="dbpw",
