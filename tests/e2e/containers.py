@@ -19,7 +19,7 @@ class Containers:
     POSTGRES_IMAGE = "postgres:11"
     POSTGRES_USER = "postgres"
     POSTGRES_PASSWORD = "mysecretpassword"
-    ACAPY_IMAGE = "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5"
+    ACAPY_IMAGE = "docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_1.0.0-rc1"
     GENESIS_URL = "https://raw.githubusercontent.com/Indicio-tech/indicio-network/main/genesis_files/pool_transactions_testnet_genesis"
 
     def __init__(self, client: docker.DockerClient):
