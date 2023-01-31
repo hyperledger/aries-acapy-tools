@@ -210,9 +210,33 @@ class Containers:
         admin_port: int,
         wallet_type: str,
         postgres: Container,
+        mwst: bool = None,
     ) -> Container:
         """Create an acapy container for use with a postgres DB."""
         self.wait_until_healthy(postgres)
+        if mwst:
+            return self.acapy(
+                name,
+                admin_port,
+                command=f"""
+                    start -it http 0.0.0.0 3000
+                        --label {name}
+                        -ot http
+                        -e http://{name}:3000
+                        --admin 0.0.0.0 3001 --admin-insecure-mode
+                        --log-level debug
+                        --genesis-url {self.GENESIS_URL}
+                        --tails-server-base-url http://{self.TAILS_NAME}:6543
+                        --wallet-type {wallet_type}
+                        --wallet-name {name}
+                        --wallet-key {wallet_key}
+                        --wallet-storage-type postgres_storage
+                        --wallet-storage-config '{{"url":"{postgres.name}:5432","wallet_scheme":"MultiWalletSingleTable"}}'
+                        --wallet-storage-creds '{{"account":"{self.POSTGRES_USER}","password":"{self.POSTGRES_PASSWORD}","admin_account":"{self.POSTGRES_USER}","admin_password":"{self.POSTGRES_PASSWORD}"}}'
+                        --preserve-exchange-records
+                        --auto-provision
+                """,
+        )
         return self.acapy(
             name,
             admin_port,

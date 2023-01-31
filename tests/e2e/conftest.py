@@ -180,13 +180,13 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
         # Pre condition
         postgres = containers.postgres(5432)
         agency_container = containers.acapy_postgres(
-            "agency", "agency_insecure0", 3003, "indy", postgres
+            "agency", "agency_insecure0", 3003, "indy", postgres, mwst=True
         )
         alice_container = containers.acapy_postgres(
-            "alice", "alice_insecure1", 3001, "indy", postgres
+            "alice", "alice_insecure1", 3001, "indy", postgres, mwst=True
         )
         bob_container = containers.acapy_postgres(
-            "bob", "bob_insecure1", 3002, "indy", postgres
+            "bob", "bob_insecure1", 3002, "indy", postgres, mwst=True
         )
         containers.wait_until_healthy(agency_container)
         containers.wait_until_healthy(alice_container)
@@ -245,13 +245,13 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
 
         # Post condition
         agency_container = containers.acapy_postgres(
-            "agency", "agency_insecure0", 3003, "askar", postgres
+            "agency", "agency_insecure0", 3003, "askar", postgres, mwst=True
         )
         alice_container = containers.acapy_postgres(
-            "alice", "alice_insecure1", 3001, "askar", postgres
+            "alice", "alice_insecure1", 3003, "askar", postgres, mwst=True
         )
         bob_container = containers.acapy_postgres(
-            "bob", "bob_insecure1", 3002, "askar", postgres
+            "bob", "bob_insecure1", 3003, "askar", postgres, mwst=True
         )
         containers.wait_until_healthy(agency_container)
         containers.wait_until_healthy(alice_container)
@@ -269,10 +269,10 @@ class TestPgMWSTStores(WalletTypeToBeTested):
         # Pre condition
         postgres = containers.postgres(5432)
         alice_container = containers.acapy_postgres(
-            "alice", "alice_insecure1", 3001, "indy", postgres
+            "alice", "alice_insecure1", 3001, "indy", postgres, mwst=True
         )
         bob_container = containers.acapy_postgres(
-            "bob", "bob_insecure1", 3002, "indy", postgres
+            "bob", "bob_insecure1", 3002, "indy", postgres, mwst=True
         )
         containers.wait_until_healthy(alice_container)
         containers.wait_until_healthy(bob_container)
@@ -299,10 +299,10 @@ class TestPgMWSTStores(WalletTypeToBeTested):
 
         # Post condition
         alice_container = containers.acapy_postgres(
-            "alice", "alice_insecure1", 3001, "askar", postgres
+            "alice", "alice_insecure1", 3001, "askar", postgres, mwst=True
         )
         bob_container = containers.acapy_postgres(
-            "bob", "bob_insecure1", 3002, "askar", postgres
+            "bob", "bob_insecure1", 3002, "askar", postgres, mwst=True
         )
         containers.wait_until_healthy(alice_container)
         containers.wait_until_healthy(bob_container)
