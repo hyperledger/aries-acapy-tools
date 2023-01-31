@@ -1,6 +1,7 @@
 import asyncio
 
 from controller import Controller
+from controller.models import CreateWalletResponse
 import docker
 import pytest
 import pytest_asyncio
@@ -108,7 +109,7 @@ class TestSqliteDBPW(WalletTypeToBeTested):
 
 class TestPgDBPW(WalletTypeToBeTested):
     @pytest.mark.asyncio
-    async def test_migrate(self, containers: Containers, tmp_path_factory):
+    async def test_migrate(self, containers: Containers):
         # Pre condition
         postgres = containers.postgres(5432)
         alice_container = containers.acapy_postgres(
@@ -161,16 +162,105 @@ class TestPgDBPW(WalletTypeToBeTested):
             await test_cases.post(alice, bob)
 
 
-class TestPgMWST(WalletTypeToBeTested):
+class TestPgMWSTProfiles(WalletTypeToBeTested):
     @pytest.mark.asyncio
-    async def test_migrate(self, containers: Containers, tmp_path_factory):
+    async def test_migrate(self, containers: Containers):
+        # Pre condition
+        postgres = containers.postgres(5432)
+        agency_container = containers.acapy_postgres(
+            "agency", "agency_insecure0", 3003, "indy", postgres
+        )
+        alice_container = containers.acapy_postgres(
+            "alice", "alice_insecure1", 3001, "indy", postgres
+        )
+        bob_container = containers.acapy_postgres(
+            "bob", "bob_insecure1", 3002, "indy", postgres
+        )
+        containers.wait_until_healthy(agency_container)
+        containers.wait_until_healthy(alice_container)
+        containers.wait_until_healthy(bob_container)
+
+        test_cases = MigrationTestCases()
+
+        async with Controller("http://agency:3003") as agency:
+            alice_wallet = await agency.post(
+                "/multitenancy/wallet",
+                json={
+                    "label": "Alice",
+                    "wallet_name": "alice",
+                    "wallet_key": "alice_insecure1",
+                    "wallet_type": "indy",
+                },
+                response=CreateWalletResponse,
+            )
+            bob_wallet = await agency.post(
+                "/multitenancy/wallet",
+                json={
+                    "label": "Bob",
+                    "wallet_name": "bob",
+                    "wallet_key": "bob_insecure1",
+                    "wallet_type": "indy",
+                },
+                response=CreateWalletResponse,
+            )
+
+            async with Controller(
+                "http://agency:3003",
+                wallet_id=alice_wallet.wallet_id,
+                subwallet_token=alice_wallet.token,
+            ) as alice, Controller(
+                "http://agency:3003",
+                wallet_id=bob_wallet.wallet_id,
+                subwallet_token=bob_wallet.token,
+            ) as bob:
+                await test_cases.pre(agency, alice, bob)
+
+        # Prepare for migration
+        containers.stop(alice_container)
+        containers.stop(bob_container)
+
+        # Migrate
+        await main(
+            strategy="mwst-as-profiles",
+            uri=f"postgres://postgres:mysecretpassword@localhost:5432/wallets",
+            base_wallet_name="agency",
+            wallet_keys={
+                "agency": "agency_insecure0",
+                "alice": "alice_insecure1",
+                "bob": "bob_insecure1",
+            },
+        )
+
+        # Post condition
+        agency_container = containers.acapy_postgres(
+            "agency", "agency_insecure0", 3003, "askar", postgres
+        )
+        alice_container = containers.acapy_postgres(
+            "alice", "alice_insecure1", 3001, "askar", postgres
+        )
+        bob_container = containers.acapy_postgres(
+            "bob", "bob_insecure1", 3002, "askar", postgres
+        )
+        containers.wait_until_healthy(agency_container)
+        containers.wait_until_healthy(alice_container)
+        containers.wait_until_healthy(bob_container)
+
+        async with Controller("http://agency:3003") as agency, Controller(
+            "http://agency:3003"
+        ) as alice, Controller("http://agency:3003") as bob:
+            await test_cases.post(agency, alice, bob)
+
+
+class TestPgMWSTStores(WalletTypeToBeTested):
+    @pytest.mark.asyncio
+    async def test_migrate(self, containers: Containers):
         # Pre condition
         postgres = containers.postgres(5432)
         alice_container = containers.acapy_postgres(
-            "alice", "insecure", 3001, "indy", postgres
+            "alice", "alice_insecure1", 3001, "indy", postgres
         )
         bob_container = containers.acapy_postgres(
-            "bob", "insecure", 3002, "indy", postgres
+            "bob", "bob_insecure1", 3002, "indy", postgres
         )
         containers.wait_until_healthy(alice_container)
         containers.wait_until_healthy(bob_container)
@@ -187,25 +277,20 @@ class TestPgMWST(WalletTypeToBeTested):
 
         # Migrate
         await main(
-            strategy="dbpw",
-            uri=f"postgres://postgres:mysecretpassword@localhost:5432/alice",
-            wallet_name="alice",
-            wallet_key="insecure",
-        )
-
-        await main(
-            strategy="dbpw",
-            uri=f"postgres://postgres:mysecretpassword@localhost:5432/bob",
-            wallet_name="bob",
-            wallet_key="insecure",
+            strategy="mwst-as-stores",
+            uri=f"postgres://postgres:mysecretpassword@localhost:5432/wallets",
+            wallet_keys={
+                "alice": "alice_insecure1",
+                "bob": "bob_insecure1",
+            },
         )
 
         # Post condition
         alice_container = containers.acapy_postgres(
-            "alice", "insecure", 3001, "askar", postgres
+            "alice", "alice_insecure1", 3001, "askar", postgres
         )
         bob_container = containers.acapy_postgres(
-            "bob", "insecure", 3002, "askar", postgres
+            "bob", "bob_insecure1", 3002, "askar", postgres
         )
         containers.wait_until_healthy(alice_container)
         containers.wait_until_healthy(bob_container)
