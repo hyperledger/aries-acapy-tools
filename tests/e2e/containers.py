@@ -102,6 +102,7 @@ class Containers:
         """Create a postgres container."""
         container = self.client.containers.run(
             self.POSTGRES_IMAGE,
+            name="postgres",
             volumes={volume: {"bind": "/var/lib/postgresql/data", "mode": "rw,z"}}
             if volume
             else None,
