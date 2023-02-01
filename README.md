@@ -155,6 +155,12 @@ This strategy implements migration for a PostgreSQL database that uses the `Mult
 askar-upgrade --strategy mwst-as-profiles --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> --base-wallet-name <base wallet name> --wallet-keys <wallet keys>
 ```
 
+#### Askar Multitenancy
+After migration, the startup command must include the following argument:
+```
+--multitenancy-config wallet_type=askar-profile
+```
+
 
 #### --allow-missing-wallet check
 
