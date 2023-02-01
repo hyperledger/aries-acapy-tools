@@ -268,10 +268,13 @@ class TestPgMWSTStores(WalletTypeToBeTested):
         alice_container = containers.acapy_postgres(
             "alice", "alice_insecure1", 3001, "indy", postgres, mwst=True
         )
+        # We must wait until Alice starts before starting Bob or else there are
+        # race conditions on who can create the DB first
+        containers.wait_until_healthy(alice_container)
+
         bob_container = containers.acapy_postgres(
             "bob", "bob_insecure1", 3002, "indy", postgres, mwst=True
         )
-        containers.wait_until_healthy(alice_container)
         containers.wait_until_healthy(bob_container)
 
         test_cases = MigrationTestCases()

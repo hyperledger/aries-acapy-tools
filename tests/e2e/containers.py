@@ -251,7 +251,7 @@ class Containers:
             """
 
         if askar_profile:
-            command += f"""
+            command += """
                 --multitenancy-config wallet_type=askar-profile
             """
 

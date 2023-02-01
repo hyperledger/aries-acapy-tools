@@ -17,10 +17,9 @@ import msgpack
 import nacl.pwhash
 
 from .db_connection import DbConnection, Wallet
-from .error import UpgradeError
+from .error import UpgradeError, MissingWalletError
 from .pg_connection import PgConnection, PgWallet
 from .pg_mwst_connection import PgMWSTConnection, PgMWSTProfilesWallet
-from .pg_mwst_stores_connection import PgMWSTStoresConnection
 from .sqlite_connection import SqliteConnection
 
 
@@ -630,37 +629,64 @@ class MwstAsStoresStrategy(Strategy):
 
     def __init__(
         self,
-        conn: PgMWSTStoresConnection,
+        uri: str,
         wallet_keys: Dict[str, str],
         allow_missing_wallet: Optional[bool] = None,
     ):
-        self.conn = conn
+        self.uri = uri
         self.wallet_keys = wallet_keys
         self.allow_missing_wallet = allow_missing_wallet
 
     def create_new_db_connection(self, wallet_name: str):
-        parsed = urlparse(self.conn.uri)
+        parsed = urlparse(self.uri)
         new_conn_uri = f"{parsed.scheme}://{parsed.netloc}/{wallet_name}"
-        return PgMWSTStoresConnection(new_conn_uri)
+        return PgMWSTConnection(new_conn_uri)
+
+    async def check_wallet_alignment(self, conn, wallet_keys):
+        """Verify that the wallet names passed in align with
+        the wallet names found in the database.
+        """
+        wallet_id_list = await conn.fetch(
+            """
+            SELECT wallet_id FROM metadata
+            """
+        )
+        retrieved_wallet_keys = [wallet_id[0] for wallet_id in wallet_id_list]
+
+        for wallet_id in wallet_keys.keys():
+            if wallet_id not in retrieved_wallet_keys:
+                raise UpgradeError(f"Wallet {wallet_id} not found in database")
+        for wallet_id in retrieved_wallet_keys:
+            if wallet_id not in wallet_keys.keys():
+                raise MissingWalletError(
+                    f"Must provide entry for {wallet_id} in wallet_keys dictionary to migrate wallet"
+                )
+
+    async def check_missing_wallet_flag(self, conn, wallet_keys, allow_missing_wallet):
+        if allow_missing_wallet:
+            try:
+                await self.check_wallet_alignment(conn, wallet_keys)
+            except MissingWalletError:
+                print("Running upgrade without migrating all wallets")
+        else:
+            await self.check_wallet_alignment(conn, wallet_keys)
 
     async def run(self):
         """Perform the upgrade."""
 
         # Connect to original database
-        await self.conn.connect()
-        await self.conn.check_missing_wallet_flag(
-            self.wallet_keys, self.allow_missing_wallet
+        source = await asyncpg.connect(self.uri)
+        await self.check_missing_wallet_flag(
+            source, self.wallet_keys, self.allow_missing_wallet
         )
 
         for wallet_name, wallet_key in self.wallet_keys.items():
 
             # Connect to new database
-            new_db_conn: PgMWSTStoresConnection = self.create_new_db_connection(
-                wallet_name
-            )
+            new_db_conn: PgMWSTConnection = self.create_new_db_connection(wallet_name)
             await new_db_conn.connect()
 
-            wallet = new_db_conn.get_wallet(self.conn, wallet_name)
+            wallet = new_db_conn.get_wallet(source, wallet_name)
             try:
                 await new_db_conn.pre_upgrade()
                 indy_key = await self.fetch_indy_key(wallet, wallet_key)
@@ -673,4 +699,4 @@ class MwstAsStoresStrategy(Strategy):
 
             await self.convert_items_to_askar(new_db_conn.uri, wallet_key)
 
-        await self.conn.close()
+        await source.close()

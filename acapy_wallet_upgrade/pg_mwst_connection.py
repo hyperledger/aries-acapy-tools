@@ -4,7 +4,7 @@ from typing import Optional
 from asyncpg import Connection
 import asyncpg
 
-from .error import UpgradeError, MissingWalletError
+from .error import UpgradeError
 from .pg_connection import PgConnection, PgWallet
 
 
@@ -13,35 +13,6 @@ class PgMWSTConnection(PgConnection):
     management mode."""
 
     DB_TYPE = "pgsql_mwst"
-
-    async def check_wallet_alignment(self, wallet_keys):
-        """Verify that the wallet names passed in align with
-        the wallet names found in the database.
-        """
-        wallet_id_list = await self._conn.fetch(
-            """
-            SELECT wallet_id FROM metadata
-            """
-        )
-        retrieved_wallet_keys = [wallet_id[0] for wallet_id in wallet_id_list]
-
-        for wallet_id in wallet_keys.keys():
-            if wallet_id not in retrieved_wallet_keys:
-                raise UpgradeError(f"Wallet {wallet_id} not found in database")
-        for wallet_id in retrieved_wallet_keys:
-            if wallet_id not in wallet_keys.keys():
-                raise MissingWalletError(
-                    f"Must provide entry for {wallet_id} in wallet_keys dictionary to migrate wallet"
-                )
-
-    async def check_missing_wallet_flag(self, wallet_keys, allow_missing_wallet):
-        if allow_missing_wallet:
-            try:
-                await self.check_wallet_alignment(wallet_keys)
-            except MissingWalletError:
-                print("Running upgrade without migrating all wallets")
-        else:
-            await self.check_wallet_alignment(wallet_keys)
 
     async def connect(self):
         """Accessor for the connection pool instance."""
