@@ -18,6 +18,7 @@ async def migrate_pg_db(
     wallet_name: Optional[str] = None,
     wallet_key: Optional[str] = None,
     base_wallet_name: Optional[str] = None,
+    base_wallet_key: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
     allow_missing_wallet=None,
 ):
@@ -39,6 +40,7 @@ async def migrate_pg_db(
         wallet_name,
         wallet_key,
         base_wallet_name,
+        base_wallet_key,
         wallet_keys,
         allow_missing_wallet,
     )

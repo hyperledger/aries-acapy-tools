@@ -37,7 +37,7 @@ controller = {git = "https://github.com/indicio-tech/acapy-minimal-example.git",
 docker = "^6.0.1"
 
 [tool.poetry.scripts]
-askar-upgrade = "acapy_wallet_upgrade.__main__:main"
+askar-upgrade = "acapy_wallet_upgrade.__main__:entrypoint"
 
 
 [build-system]

@@ -180,7 +180,13 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
         # Pre condition
         postgres = containers.postgres(5432)
         agency_container = containers.acapy_postgres(
-            "agency", "agency_insecure0", 3001, "indy", postgres, mwst=True, mt=True,
+            "agency",
+            "agency_insecure0",
+            3001,
+            "indy",
+            postgres,
+            mwst=True,
+            mt=True,
         )
         containers.wait_until_healthy(agency_container)
 
@@ -226,16 +232,19 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
             strategy="mwst-as-profiles",
             uri=f"postgres://postgres:mysecretpassword@localhost:5432/wallets",
             base_wallet_name="agency",
-            wallet_keys={
-                "agency": "agency_insecure0",
-                "alice": "alice_insecure1",
-                "bob": "bob_insecure1",
-            },
+            base_wallet_key="agency_insecure0",
         )
 
         # Post condition
         agency_container = containers.acapy_postgres(
-            "agency", "agency_insecure0", 3001, "askar", postgres, mwst=True, mt=True,
+            "agency",
+            "agency_insecure0",
+            3001,
+            "askar",
+            postgres,
+            mwst=True,
+            mt=True,
+            askar_profile=True,
         )
         containers.wait_until_healthy(agency_container)
 
@@ -259,10 +268,13 @@ class TestPgMWSTStores(WalletTypeToBeTested):
         alice_container = containers.acapy_postgres(
             "alice", "alice_insecure1", 3001, "indy", postgres, mwst=True
         )
+        # We must wait until Alice starts before starting Bob or else there are
+        # race conditions on who can create the DB first
+        containers.wait_until_healthy(alice_container)
+
         bob_container = containers.acapy_postgres(
             "bob", "bob_insecure1", 3002, "indy", postgres, mwst=True
         )
-        containers.wait_until_healthy(alice_container)
         containers.wait_until_healthy(bob_container)
 
         test_cases = MigrationTestCases()

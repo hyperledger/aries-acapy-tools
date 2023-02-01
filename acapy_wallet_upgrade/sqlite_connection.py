@@ -1,3 +1,4 @@
+from typing import Optional
 from urllib.parse import urlparse
 import aiosqlite
 
@@ -99,13 +100,17 @@ class SqliteConnection(DbConnection):
         """,
         )
 
-    async def create_config(self, default_profile: str, key: str):
+    async def create_config(self, key: str, default_profile: Optional[str] = None):
         """Insert the initial profile."""
         await self._conn.executemany(
             "INSERT INTO config (name, value) VALUES (?1, ?2)",
             (
-                ("default_profile", default_profile),
-                ("key", key),
+                (key, value)
+                for key, value in (
+                    ("key", key),
+                    ("default_profile", default_profile),
+                )
+                if value is not None
             ),
         )
         await self._conn.commit()

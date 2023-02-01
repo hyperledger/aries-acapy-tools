@@ -1,4 +1,5 @@
 import base64
+from typing import Optional
 from urllib.parse import urlparse
 
 import asyncpg
@@ -136,14 +137,21 @@ class PgConnection(DbConnection):
             """,
         )
 
-    async def create_config(self, default_profile: str, key: str):
+    async def create_config(self, key: str, default_profile: Optional[str] = None):
         """Insert the initial profile."""
         async with self._conn.transaction():
             await self._conn.executemany(
                 """
                     INSERT INTO config (name, value) VALUES($1, $2)
                 """,
-                (("default_profile", default_profile), ("key", key)),
+                (
+                    (key, value)
+                    for key, value in (
+                        ("key", key),
+                        ("default_profile", default_profile),
+                    )
+                    if value is not None
+                ),
             )
 
     async def finish_upgrade(self):
