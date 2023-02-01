@@ -237,7 +237,7 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
 
         # Post condition
         agency_container = containers.acapy_postgres(
-            "wallets",
+            "agency",
             "agency_insecure0",
             3001,
             "askar",

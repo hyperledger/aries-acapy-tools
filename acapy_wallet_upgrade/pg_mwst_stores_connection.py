@@ -115,9 +115,10 @@ class PgMWSTStoresConnection(PgMWSTConnection):
         return PgMWSTStoresWallet(old_conn._conn, self._conn, wallet_id)
 
 
-
 class PgMWSTStoresWallet(PgWallet):
-    def __init__(self, old_conn: asyncpg.Connection, new_conn: asyncpg.Connection, wallet_id: str):
+    def __init__(
+        self, old_conn: asyncpg.Connection, new_conn: asyncpg.Connection, wallet_id: str
+    ):
         self._old_conn = old_conn
         self._new_conn = new_conn
         self._wallet_id = wallet_id
@@ -158,6 +159,8 @@ class PgMWSTStoresWallet(PgWallet):
         Differences from PgMWSTWallet:
         - Pulls from items instead of items old
         """
+
+        # TODO Maybe we should be deleting items as we go still?
         offset = 0
         while True:
             rows = await self._old_conn.fetch(

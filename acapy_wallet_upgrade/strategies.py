@@ -10,6 +10,7 @@ from typing import Dict, Optional, Union, cast
 from urllib.parse import urlparse
 
 from aries_askar import Key, Store
+import asyncpg
 import base58
 import cbor2
 import msgpack
@@ -18,7 +19,7 @@ import nacl.pwhash
 from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
 from .pg_connection import PgConnection, PgWallet
-from .pg_mwst_connection import PgMWSTConnection
+from .pg_mwst_connection import PgMWSTConnection, PgMWSTProfilesWallet
 from .pg_mwst_stores_connection import PgMWSTStoresConnection
 from .sqlite_connection import SqliteConnection
 
@@ -32,9 +33,6 @@ ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_L
 
 class Strategy(ABC):
     """Base class for upgrade strategies."""
-
-    def __init__(self, conn: DbConnection):
-        self.conn = conn
 
     def encrypt_merged(
         self, message: bytes, my_key: bytes, hmac_key: bytes = None
@@ -431,9 +429,9 @@ class Strategy(ABC):
 
         return tags
 
-    async def create_config(self, name: str, indy_key: dict):
+    async def create_config(self, conn: DbConnection, name: str, indy_key: dict):
         pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
-        await self.conn.create_config(default_profile=name, key=pass_key)
+        await conn.create_config(default_profile=name, key=pass_key)
 
     async def init_profile(self, wallet: Wallet, name: str, indy_key: dict) -> dict:
         profile_key = {
@@ -476,7 +474,7 @@ class DbpwStrategy(Strategy):
         try:
             await self.conn.pre_upgrade()
             indy_key = await self.fetch_indy_key(wallet, self.wallet_key)
-            await self.create_config(self.wallet_name, indy_key)
+            await self.create_config(self.conn, self.wallet_name, indy_key)
             profile_key = await self.init_profile(wallet, self.wallet_name, indy_key)
             await self.update_items(wallet, indy_key, profile_key)
             await self.conn.finish_upgrade()
@@ -491,12 +489,12 @@ class MwstAsProfilesStrategy(Strategy):
 
     def __init__(
         self,
-        conn: PgMWSTConnection,
+        uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
         allow_missing_wallet: Optional[bool] = None,
     ):
-        self.conn = conn
+        self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
         self.allow_missing_wallet = allow_missing_wallet
@@ -519,19 +517,22 @@ class MwstAsProfilesStrategy(Strategy):
         return profile_key
 
     async def migrate_one_profile(
-        self, base_indy_key: dict, wallet_name: str, wallet_id: str, wallet_key: str
+        self,
+        wallet: PgMWSTProfilesWallet,
+        base_indy_key: dict,
+        wallet_id: str,
+        wallet_key: str,
     ):
         """Migrate one wallet."""
-        wallet = self.conn.get_wallet(wallet_name)
         indy_key = await self.fetch_indy_key(wallet, wallet_key)
         profile_key = await self.init_profile(
             wallet, wallet_id, base_indy_key, indy_key
         )
         await self.update_items(wallet, indy_key, profile_key)
 
-    async def get_wallet_info(self):
+    async def get_wallet_info(self, uri: str):
         store = await Store.open(
-            self.conn.uri, profile=self.base_wallet_name, pass_key=self.base_wallet_key
+            uri, profile=self.base_wallet_name, pass_key=self.base_wallet_key
         )
         async for record in store.scan("wallet_record"):
             settings = record.value_json["settings"]
@@ -541,22 +542,58 @@ class MwstAsProfilesStrategy(Strategy):
                 settings["wallet.key"],
             )
 
+    async def create_sub_config(self, conn: DbConnection, indy_key: dict):
+        pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
+        await conn.create_config(key=pass_key)
+
     async def run(self):
-        """Perform the upgrade."""
-        await self.conn.connect()
+        """Perform the upgrade.
+
+        - Source Indy Wallet is read from, values deleted as we go to reduce storage overhead
+        - Base Wallet Store where the base wallet and it's records are migrated
+        - Sub wallet Store where the sub wallets and their records are migrated
+
+        After Base wallet is migrated, it can be finalized.
+
+        Wallet info of subwallets read from base wallet post migration.
+        """
+        source = await asyncpg.connect(self.uri)
+        parsed = urlparse(self.uri)
+
+        base_conn = PgMWSTConnection(
+            f"{parsed.scheme}://{parsed.netloc}/{self.base_wallet_name}"
+        )
+        await base_conn.connect()
+        sub_conn = PgMWSTConnection(
+            f"{parsed.scheme}://{parsed.netloc}/multitenant_sub_wallet"
+        )
+        await sub_conn.connect()
+
         try:
-            await self.conn.pre_upgrade()
-            base_wallet = self.conn.get_wallet(self.base_wallet_name)
+            await base_conn.pre_upgrade()
+            await sub_conn.pre_upgrade()
+            base_wallet = base_conn.get_wallet(source, self.base_wallet_name)
 
             base_indy_key: dict = await self.fetch_indy_key(
                 base_wallet, self.base_wallet_key
             )
-            await self.create_config(self.base_wallet_name, base_indy_key)
+            await self.create_config(base_conn, self.base_wallet_name, base_indy_key)
+
+            # ACA-Py expects a default profile
+            default_wallet = sub_conn.get_wallet(source, "default")
+            await self.create_config(sub_conn, "default", base_indy_key)
+            await super().init_profile(default_wallet, "default", base_indy_key)
 
             await self.migrate_one_profile(
+                base_wallet,
                 base_indy_key,
                 self.base_wallet_name,
-                self.base_wallet_name,
+                self.base_wallet_key,
+            )
+            await base_conn.finish_upgrade()
+            await base_conn.close()
+            await self.convert_items_to_askar(
+                base_conn.uri,
                 self.base_wallet_key,
             )
 
@@ -566,20 +603,25 @@ class MwstAsProfilesStrategy(Strategy):
             #     self.wallet_info, self.allow_missing_wallet
             # )
 
-            wallet_names = []
-            async for wallet_name, wallet_id, wallet_key in self.get_wallet_info():
-                wallet_names.append(wallet_name)
+            wallet_ids = []
+            async for wallet_name, wallet_id, wallet_key in self.get_wallet_info(
+                base_conn.uri
+            ):
+                wallet_ids.append(wallet_id)
+                wallet = sub_conn.get_wallet(source, wallet_name)
                 await self.migrate_one_profile(
-                    base_indy_key, wallet_name, wallet_id, wallet_key
+                    wallet, base_indy_key, wallet_id, wallet_key
                 )
 
-            await self.conn.finish_upgrade()
+            await sub_conn.finish_upgrade()
         finally:
-            await self.conn.close()
+            await source.close()
+            await base_conn.close()
+            await sub_conn.close()
 
-        for wallet_name in wallet_names:
+        for wallet_id in wallet_ids:
             await self.convert_items_to_askar(
-                self.conn.uri, self.base_wallet_key, wallet_name
+                sub_conn.uri, self.base_wallet_key, wallet_id
             )
 
 
@@ -600,12 +642,6 @@ class MwstAsStoresStrategy(Strategy):
         parsed = urlparse(self.conn.uri)
         new_conn_uri = f"{parsed.scheme}://{parsed.netloc}/{wallet_name}"
         return PgMWSTStoresConnection(new_conn_uri)
-
-    async def create_config(
-        self, new_conn_db: PgMWSTStoresConnection, name: str, indy_key: dict
-    ):
-        pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
-        await new_conn_db.create_config(default_profile=name, key=pass_key)
 
     async def run(self):
         """Perform the upgrade."""

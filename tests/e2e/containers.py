@@ -252,7 +252,7 @@ class Containers:
 
         if askar_profile:
             command += f"""
-                --multitenancy-config wallet_type=askar-profile wallet_name={name}
+                --multitenancy-config wallet_type=askar-profile
             """
 
         return self.acapy(

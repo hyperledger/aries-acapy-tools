@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Sequence, Tuple, Union
+from typing import AsyncIterator, Optional, Sequence, Tuple, Union
 
 
 class DbConnection(ABC):
@@ -20,7 +20,7 @@ class DbConnection(ABC):
         """Add new tables and columns."""
 
     @abstractmethod
-    async def create_config(self, default_profile: str, key: str):
+    async def create_config(self, key: str, default_profile: Optional[str] = None):
         """Insert the initial profile."""
 
     @abstractmethod

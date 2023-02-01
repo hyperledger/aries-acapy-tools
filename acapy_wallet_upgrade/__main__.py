@@ -97,9 +97,8 @@ async def main(
         if not base_wallet_key:
             raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
-        conn = PgMWSTConnection(uri)
         strategy_inst = MwstAsProfilesStrategy(
-            conn, base_wallet_name, base_wallet_key, allow_missing_wallet
+            uri, base_wallet_name, base_wallet_key, allow_missing_wallet
         )
 
     elif strategy == "mwst-as-stores":
