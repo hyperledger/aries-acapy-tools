@@ -9,8 +9,6 @@ from urllib.parse import urlparse
 
 from .error import UpgradeError
 from .pg_connection import PgConnection
-from .pg_mwst_connection import PgMWSTConnection
-from .pg_mwst_stores_connection import PgMWSTStoresConnection
 from .sqlite_connection import SqliteConnection
 from .strategies import DbpwStrategy, MwstAsProfilesStrategy, MwstAsStoresStrategy
 
