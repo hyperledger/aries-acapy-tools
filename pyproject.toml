@@ -39,7 +39,9 @@ docker = "^6.0.1"
 [tool.poetry.scripts]
 askar-upgrade = "acapy_wallet_upgrade.__main__:entrypoint"
 
-
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+markers = ["e2e"]
