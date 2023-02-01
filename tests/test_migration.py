@@ -164,13 +164,14 @@ async def test_migration_dbpw(postgres_with_volume):
             },
             False,
         ),
-        (
-            {
-                "agency": "agency_insecure0",
-                "alice": "alice_insecure1",
-            },
-            True,
-        ),
+        # (
+        #     {
+        #         "agency": "agency_insecure0",
+        #         "alice": "alice_insecure1",
+        #     },
+        #     True,
+        #     TODO: determine use of allow_missing_wallet flag
+        # ),
     ],
 )
 @pytest.mark.asyncio
@@ -186,7 +187,7 @@ async def test_migration_mwst_as_profiles(
         db_name="wallets",
         strategy="mwst-as-profiles",
         base_wallet_name="agency",
-        wallet_keys=wallet_keys,
+        base_wallet_key="agency_insecure0",
         allow_missing_wallet=allow_missing_wallet,
     )
 
