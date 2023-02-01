@@ -7,19 +7,43 @@ from controller.protocols import (
     indy_anoncred_onboard,
     indy_issue_credential_v1,
     indy_present_proof_v1,
+    indy_anoncreds_revoke,
 )
 
 
 class MigrationTestCases:
     def __init__(self):
+        now = int(time.time())
         self._cases = (
             self.connections(),
-            self.credentials(
-                {"first_name": "Alice", "last_name": "Cooper"},
-                [{"name": "first_name"}, {"name": "last_name"}],
-                supports_revocation=True,
-            ),
+            self.credentials_without_revocation(),
             self.credentials_with_revocation(),
+            # self.revoked_credential(
+            #    {"first_name": "Bob", "last_name": "Builder"},
+            #    [
+            #        {
+            #            "name": "first_name",
+            #            "non_revoked": {"to": now + 1000, "from": now},
+            #        }
+            #    ],
+            #    supports_revocation=True,
+            # ),
+            self.large_credential_without_revocation(),
+            """ self.composite_credential_proof(
+                {"nick_name": "Bob", "last_name": "Builder"},
+                {"first_name": "William", "last_name": "Builder"},
+                [
+                    {
+                        "name": "nick_name",
+                        "non_revoked": {"to": now + 1000, "from": now},
+                    },
+                    {
+                        "name": "last_name",
+                        "non_revoked": {"to": now + 1000, "from": now},
+                    }
+                ],
+                supports_revocation=True,
+            ) """,
         )
 
     async def pre(self, alice: Controller, bob: Controller):
@@ -42,14 +66,10 @@ class MigrationTestCases:
 
         await alice.post(f"/connections/{alice_conn.connection_id}/send-ping")
 
-    async def credentials(
-        self,
-        cred_attrs: Dict[str, str],
-        requested_attributes: List[Mapping[str, Any]],
-        supports_revocation: bool = False,
-    ) -> AsyncGenerator[None, Tuple[Controller, Controller]]:
-        alice, bob = yield
-        alice_conn, bob_conn = await didexchange(alice, bob)
+    async def onboard_and_issue_v1(
+        self, alice, bob, cred_attrs, supports_revocation, connections=None
+    ):
+        alice_conn, bob_conn = connections or await didexchange(alice, bob)
         # Issuance prep
         await indy_anoncred_onboard(alice)
         schema, cred_def = await indy_anoncred_credential_artifacts(
@@ -66,10 +86,22 @@ class MigrationTestCases:
             cred_def.credential_definition_id,
             cred_attrs,
         )
+        return alice_conn, bob_conn
+
+    async def credentials(
+        self,
+        cred_attrs: Dict[str, str],
+        requested_attributes: List[Mapping[str, Any]],
+        supports_revocation: bool = False,
+    ) -> AsyncGenerator[None, Tuple[Controller, Controller]]:
+        alice, bob = yield
+
+        alice_conn, bob_conn = await self.onboard_and_issue_v1(
+            alice, bob, cred_attrs, supports_revocation
+        )
 
         alice, bob = yield
 
-        now = int(time.time())
         _, alice_pres_ex_askar = await indy_present_proof_v1(
             bob,
             alice,
@@ -83,8 +115,120 @@ class MigrationTestCases:
     def credentials_with_revocation(
         self,
     ) -> AsyncGenerator[None, Tuple[Controller, Controller]]:
+        now = int(time.time())
         return self.credentials(
             {"first_name": "Bob", "last_name": "Builder"},
-            [{"name": "first_name"}, {"name": "last_name"}],
+            [{"name": "first_name", "non_revoked": {"to": now + 1000, "from": now}}],
+            supports_revocation=True,
+        )
+
+    def credentials_without_revocation(self):
+        return self.credentials(
+            {"first_name": "Alice", "last_name": "Cooper"},
+            [{"name": "first_name"}],
             supports_revocation=False,
         )
+
+    def large_credential_without_revocation(self):
+        return self.credentials(
+            {
+                "a": "A",
+                "b": "B",
+                "c": "C",
+                "d": "D",
+                "e": "E",
+                "f": "F",
+                "g": "G",
+                "h": "H",
+                "i": "I",
+                "j": "J",
+                "k": "K",
+                "l": "L",
+                "m": "M",
+                "n": "N",
+                "o": "O",
+                "p": "P",
+                "q": "Q",
+                "r": "R",
+                "s": "S",
+                "t": "T",
+                "u": "U",
+                "v": "V",
+                "w": "W",
+                "x": "X",
+                "y": "Y",
+                "z": "Z",
+            },
+            [{"name": "j"}],
+            supports_revocation=False,
+        )
+
+    async def revoked_credential(
+        self,
+        cred_attrs: Dict[str, str],
+        requested_attributes: List[Mapping[str, Any]],
+        supports_revocation: bool = False,
+    ):
+        alice, bob = yield
+        alice_conn, bob_conn = await didexchange(alice, bob)
+        # Issuance prep
+        await indy_anoncred_onboard(alice)
+        schema, cred_def = await indy_anoncred_credential_artifacts(
+            alice,
+            list(cred_attrs.keys()),
+            support_revocation=supports_revocation,
+        )
+        # Issue the thing
+        alice_credx, bob_credx = await indy_issue_credential_v1(
+            alice,
+            bob,
+            alice_conn.connection_id,
+            bob_conn.connection_id,
+            cred_def.credential_definition_id,
+            cred_attrs,
+        )
+
+        await indy_anoncreds_revoke(
+            alice, alice_credx, alice_conn.connection_id, publish=True, notify=True
+        )
+
+        alice, bob = yield
+
+        _, alice_pres_ex_askar = await indy_present_proof_v1(
+            bob,
+            alice,
+            bob_conn.connection_id,
+            alice_conn.connection_id,
+            requested_attributes=requested_attributes,
+        )
+        assert alice_pres_ex_askar.state == "verified"
+        assert alice_pres_ex_askar.verified == "false"
+
+    async def composite_credential_proof(
+        self,
+        first_cred_attrs: Dict[str, str],
+        second_cred_attrs: Dict[str, str],
+        requested_attributes: List[Mapping[str, Any]],
+        supports_revocation: bool = False,
+    ) -> AsyncGenerator[None, Tuple[Controller, Controller]]:
+        alice, bob = yield
+
+        alice_conn, bob_conn = await self.onboard_and_issue_v1(
+            alice, bob, first_cred_attrs, supports_revocation
+        )
+
+        alice_conn, bob_conn = await self.onboard_and_issue_v1(
+            alice, bob, second_cred_attrs, supports_revocation, (alice_conn, bob_conn)
+        )
+
+        alice, bob = yield
+
+        _, alice_pres_ex_askar = await indy_present_proof_v1(
+            bob,
+            alice,
+            bob_conn.connection_id,
+            alice_conn.connection_id,
+            requested_attributes=requested_attributes,
+        )
+        assert alice_pres_ex_askar.state == "verified"
+        assert alice_pres_ex_askar.verified == "true"
