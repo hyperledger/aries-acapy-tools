@@ -210,72 +210,51 @@ class Containers:
         admin_port: int,
         wallet_type: str,
         postgres: Container,
-        mwst: bool = None,
-        mt: bool = None,
+        mwst: bool = False,
+        mt: bool = False,
+        askar_profile: bool = False,
     ) -> Container:
         """Create an acapy container for use with a postgres DB."""
         self.wait_until_healthy(postgres)
+        command = f"""
+            start -it http 0.0.0.0 3000
+                --label {name}
+                -ot http
+                -e http://{name}:3000
+                --admin 0.0.0.0 3001 --admin-insecure-mode
+                --log-level debug
+                --genesis-url {self.GENESIS_URL}
+                --tails-server-base-url http://{self.TAILS_NAME}:6543
+                --wallet-type {wallet_type}
+                --wallet-name {name}
+                --wallet-key {wallet_key}
+                --wallet-storage-type postgres_storage
+                --preserve-exchange-records
+                --auto-provision
+                --wallet-storage-creds '{{"account":"{self.POSTGRES_USER}","password":"{self.POSTGRES_PASSWORD}","admin_account":"{self.POSTGRES_USER}","admin_password":"{self.POSTGRES_PASSWORD}"}}'
+        """
+
         if mwst:
-            if mt:
-                command=f"""
-                    start -it http 0.0.0.0 3000
-                        --label {name}
-                        -ot http
-                        -e http://{name}:3000
-                        --admin 0.0.0.0 3001 --admin-insecure-mode
-                        --log-level debug
-                        --genesis-url {self.GENESIS_URL}
-                        --tails-server-base-url http://{self.TAILS_NAME}:6543
-                        --wallet-type {wallet_type}
-                        --wallet-name {name}
-                        --wallet-key {wallet_key}
-                        --wallet-storage-type postgres_storage
-                        --wallet-storage-config '{{"url":"{postgres.name}:5432","wallet_scheme":"MultiWalletSingleTable"}}'
-                        --wallet-storage-creds '{{"account":"{self.POSTGRES_USER}","password":"{self.POSTGRES_PASSWORD}","admin_account":"{self.POSTGRES_USER}","admin_password":"{self.POSTGRES_PASSWORD}"}}'
-                        --multitenant
-                        --multitenant-admin
-                        --jwt-secret insecure
-                        --preserve-exchange-records
-                        --auto-provision
-                """
-            else:
-                command=f"""
-                    start -it http 0.0.0.0 3000
-                        --label {name}
-                        -ot http
-                        -e http://{name}:3000
-                        --admin 0.0.0.0 3001 --admin-insecure-mode
-                        --log-level debug
-                        --genesis-url {self.GENESIS_URL}
-                        --tails-server-base-url http://{self.TAILS_NAME}:6543
-                        --wallet-type {wallet_type}
-                        --wallet-name {name}
-                        --wallet-key {wallet_key}
-                        --wallet-storage-type postgres_storage
-                        --wallet-storage-config '{{"url":"{postgres.name}:5432","wallet_scheme":"MultiWalletSingleTable"}}'
-                        --wallet-storage-creds '{{"account":"{self.POSTGRES_USER}","password":"{self.POSTGRES_PASSWORD}","admin_account":"{self.POSTGRES_USER}","admin_password":"{self.POSTGRES_PASSWORD}"}}'
-                        --preserve-exchange-records
-                        --auto-provision
-                """
-        else:
-            command=f"""
-                start -it http 0.0.0.0 3000
-                    --label {name}
-                    -ot http
-                    -e http://{name}:3000
-                    --admin 0.0.0.0 3001 --admin-insecure-mode
-                    --log-level debug
-                    --genesis-url {self.GENESIS_URL}
-                    --tails-server-base-url http://{self.TAILS_NAME}:6543
-                    --wallet-type {wallet_type}
-                    --wallet-name {name}
-                    --wallet-key {wallet_key}
-                    --wallet-storage-type postgres_storage
-                    --wallet-storage-config '{{"url":"{postgres.name}:5432","max_connections":5}}'
-                    --wallet-storage-creds '{{"account":"{self.POSTGRES_USER}","password":"{self.POSTGRES_PASSWORD}","admin_account":"{self.POSTGRES_USER}","admin_password":"{self.POSTGRES_PASSWORD}"}}'
-                    --preserve-exchange-records
-                    --auto-provision
+            command += f"""
+                --wallet-storage-config '{{"url":"{postgres.name}:5432","wallet_scheme":"MultiWalletSingleTable"}}'
             """
+        else:
+            command += f"""
+                --wallet-storage-config '{{"url":"{postgres.name}:5432","max_connections":5}}'
+            """
+
+        if mt:
+            command += """
+                --multitenant
+                --multitenant-admin
+                --jwt-secret insecure
+            """
+
+        if askar_profile:
+            command += f"""
+                --multitenancy-config wallet_type=askar-profile wallet_name={name}
+            """
+
         return self.acapy(
             name,
             admin_port,

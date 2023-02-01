@@ -28,6 +28,7 @@ def config():
     parser.add_argument("--wallet-name", type=str, action="store")
     parser.add_argument("--wallet-key", type=str, action="store")
     parser.add_argument("--base-wallet-name", type=str, action="store")
+    parser.add_argument("--base-wallet-key", type=str, action="store")
     parser.add_argument("--wallet-keys", type=str, action="store")
     parser.add_argument("--allow-missing-wallet", type=str, action="store")
     args, _ = parser.parse_known_args(sys.argv[1:])
@@ -46,8 +47,8 @@ def config():
     if args.strategy == "mwst-as-profiles":
         if not args.base_wallet_name:
             raise ValueError("Base wallet name required for mwst-as-profiles strategy")
-        if not args.wallet_keys:
-            raise ValueError("Wallet keys required for mwst-as-profiles strategy")
+        if not args.base_wallet_key:
+            raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
     if args.strategy == "mwst-as-stores":
         if not args.wallet_keys:
@@ -66,6 +67,7 @@ async def main(
     wallet_name: Optional[str] = None,
     wallet_key: Optional[str] = None,
     base_wallet_name: Optional[str] = None,
+    base_wallet_key: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
     allow_missing_wallet: Optional[bool] = None,
 ):
@@ -92,12 +94,12 @@ async def main(
 
         if not base_wallet_name:
             raise ValueError("Base wallet name required for mwst-as-profiles strategy")
-        if not wallet_keys:
-            raise ValueError("Wallet keys required for mwst-as-profiles strategy")
+        if not base_wallet_key:
+            raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
         conn = PgMWSTConnection(uri)
         strategy_inst = MwstAsProfilesStrategy(
-            conn, base_wallet_name, wallet_keys, allow_missing_wallet
+            conn, base_wallet_name, base_wallet_key, allow_missing_wallet
         )
 
     elif strategy == "mwst-as-stores":

@@ -6,19 +6,20 @@ import hmac
 import json
 import os
 import re
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, cast
 from urllib.parse import urlparse
 
+from aries_askar import Key, Store
 import base58
 import cbor2
 import msgpack
 import nacl.pwhash
 
+from .db_connection import DbConnection, Wallet
 from .error import UpgradeError
+from .pg_connection import PgConnection, PgWallet
 from .pg_mwst_connection import PgMWSTConnection
 from .pg_mwst_stores_connection import PgMWSTStoresConnection
-from .db_connection import DbConnection, Wallet
-from .pg_connection import PgConnection, PgWallet
 from .sqlite_connection import SqliteConnection
 
 
@@ -182,8 +183,6 @@ class Strategy(ABC):
     async def convert_items_to_askar(
         self, uri: str, wallet_key: str, profile: str = None
     ):
-        from aries_askar import Key, Store
-
         print("Opening wallet with Askar...")
         store = await Store.open(uri, pass_key=wallet_key, profile=profile)
 
@@ -494,13 +493,12 @@ class MwstAsProfilesStrategy(Strategy):
         self,
         conn: PgMWSTConnection,
         base_wallet_name: str,
-        wallet_keys: Dict[str, str],
-        allow_missing_wallet: bool = None,
+        base_wallet_key: str,
+        allow_missing_wallet: Optional[bool] = None,
     ):
         self.conn = conn
         self.base_wallet_name = base_wallet_name
-        self.base_wallet_key = wallet_keys[base_wallet_name]
-        self.wallet_keys = wallet_keys
+        self.base_wallet_key = base_wallet_key
         self.allow_missing_wallet = allow_missing_wallet
 
     async def init_profile(
@@ -520,12 +518,32 @@ class MwstAsProfilesStrategy(Strategy):
         await wallet.insert_profile(name, enc_pk)
         return profile_key
 
+    async def migrate_one_profile(
+        self, base_indy_key: dict, wallet_name: str, wallet_id: str, wallet_key: str
+    ):
+        """Migrate one wallet."""
+        wallet = self.conn.get_wallet(wallet_name)
+        indy_key = await self.fetch_indy_key(wallet, wallet_key)
+        profile_key = await self.init_profile(
+            wallet, wallet_id, base_indy_key, indy_key
+        )
+        await self.update_items(wallet, indy_key, profile_key)
+
+    async def get_wallet_info(self):
+        store = await Store.open(
+            self.conn.uri, profile=self.base_wallet_name, pass_key=self.base_wallet_key
+        )
+        async for record in store.scan("wallet_record"):
+            settings = record.value_json["settings"]
+            yield (
+                settings["wallet.name"],
+                cast(str, record.name),
+                settings["wallet.key"],
+            )
+
     async def run(self):
         """Perform the upgrade."""
         await self.conn.connect()
-        await self.conn.check_missing_wallet_flag(
-            self.wallet_keys, self.allow_missing_wallet
-        )
         try:
             await self.conn.pre_upgrade()
             base_wallet = self.conn.get_wallet(self.base_wallet_name)
@@ -535,19 +553,31 @@ class MwstAsProfilesStrategy(Strategy):
             )
             await self.create_config(self.base_wallet_name, base_indy_key)
 
-            for wallet_name, wallet_key in self.wallet_keys.items():
-                wallet = self.conn.get_wallet(wallet_name)
-                indy_key = await self.fetch_indy_key(wallet, wallet_key)
-                profile_key = await self.init_profile(
-                    wallet, wallet_name, base_indy_key, indy_key
+            await self.migrate_one_profile(
+                base_indy_key,
+                self.base_wallet_name,
+                self.base_wallet_name,
+                self.base_wallet_key,
+            )
+
+            # TODO delete? The sub wallets may not completely cover the list of
+            # wallets in the MWST DB. Warn? Note in docs?
+            # await self.conn.check_missing_wallet_flag(
+            #     self.wallet_info, self.allow_missing_wallet
+            # )
+
+            wallet_names = []
+            async for wallet_name, wallet_id, wallet_key in self.get_wallet_info():
+                wallet_names.append(wallet_name)
+                await self.migrate_one_profile(
+                    base_indy_key, wallet_name, wallet_id, wallet_key
                 )
-                await self.update_items(wallet, indy_key, profile_key)
 
             await self.conn.finish_upgrade()
         finally:
             await self.conn.close()
 
-        for wallet_name in self.wallet_keys.keys():
+        for wallet_name in wallet_names:
             await self.convert_items_to_askar(
                 self.conn.uri, self.base_wallet_key, wallet_name
             )
@@ -560,7 +590,7 @@ class MwstAsStoresStrategy(Strategy):
         self,
         conn: PgMWSTStoresConnection,
         wallet_keys: Dict[str, str],
-        allow_missing_wallet: bool = None,
+        allow_missing_wallet: Optional[bool] = None,
     ):
         self.conn = conn
         self.wallet_keys = wallet_keys
