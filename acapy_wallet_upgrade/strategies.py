@@ -19,7 +19,7 @@ import nacl.pwhash
 from .db_connection import DbConnection, Wallet
 from .error import UpgradeError, MissingWalletError
 from .pg_connection import PgConnection, PgWallet
-from .pg_mwst_connection import PgMWSTConnection, PgMWSTWallet
+from .pg_mwst_connection import PgMWSTConnection
 from .sqlite_connection import SqliteConnection
 
 
@@ -517,7 +517,7 @@ class MwstAsProfilesStrategy(Strategy):
 
     async def migrate_one_profile(
         self,
-        wallet: PgMWSTWallet,
+        wallet: PgWallet,
         base_indy_key: dict,
         wallet_id: str,
         wallet_key: str,
