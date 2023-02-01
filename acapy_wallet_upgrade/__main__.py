@@ -116,6 +116,10 @@ async def main(
     await strategy_inst.run()
 
 
-if __name__ == "__main__":
+def entrypoint():
     args = config()
     asyncio.run(main(**vars(args)))
+
+
+if __name__ == "__main__":
+    entrypoint()
