@@ -18,34 +18,33 @@ class MigrationTestCases:
             self.connections(),
             self.credentials_without_revocation(),
             self.credentials_with_revocation(),
-            # self.revoked_credential(
-            #    {"first_name": "Bob", "last_name": "Builder"},
-            #    [
-            #        {
-            #            "name": "first_name",
-            #            "non_revoked": {"to": now + 1000, "from": now},
-            #        }
-            #    ],
-            #    supports_revocation=True,
-            # ),
-            self.large_credential_without_revocation(),
-            """ self.composite_credential_proof(
-                {"nick_name": "Bob", "last_name": "Builder"},
-                {"first_name": "William", "last_name": "Builder"},
+            self.revoked_credential(
+                {"first_name": "Bob", "last_name": "Builder"},
                 [
                     {
-                        "name": "nick_name",
-                        "non_revoked": {"to": now + 1000, "from": now},
-                    },
-                    {
-                        "name": "last_name",
-                        "non_revoked": {"to": now + 1000, "from": now},
+                        "name": "first_name",
                     }
                 ],
                 supports_revocation=True,
-            ) """,
-        )
+            ),
+            self.large_credential_without_revocation(),
 
+        )
+        """   self.composite_credential_proof(
+            {"nick_name": "Bob", "last_name": "Builder"},
+            {"first_name": "William", "last_name": "Builder"},
+            [
+                {
+                    "name": "nick_name",
+                    "non_revoked": {"to": now + 1000, "from": now},
+                },
+                {
+                    "name": "last_name",
+                    "non_revoked": {"to": now + 1000, "from": now},
+                },
+            ],
+            supports_revocation=True,
+        ), """
     async def pre(self, alice: Controller, bob: Controller):
         for case in self._cases:
             await anext(case)  # advance to first yield
@@ -118,7 +117,7 @@ class MigrationTestCases:
         now = int(time.time())
         return self.credentials(
             {"first_name": "Bob", "last_name": "Builder"},
-            [{"name": "first_name", "non_revoked": {"to": now + 1000, "from": now}}],
+            [{"name": "first_name",}],
             supports_revocation=True,
         )
 
@@ -166,7 +165,7 @@ class MigrationTestCases:
     async def revoked_credential(
         self,
         cred_attrs: Dict[str, str],
-        requested_attributes: List[Mapping[str, Any]],
+        requested_attributes,
         supports_revocation: bool = False,
     ):
         alice, bob = yield
@@ -193,7 +192,8 @@ class MigrationTestCases:
         )
 
         alice, bob = yield
-
+        now = int(time.time())
+        [attr.update({"non_revoked": {"to": now, "from": now}}) for attr in requested_attributes]
         _, alice_pres_ex_askar = await indy_present_proof_v1(
             bob,
             alice,
@@ -213,9 +213,7 @@ class MigrationTestCases:
     ) -> AsyncGenerator[None, Tuple[Controller, Controller]]:
         alice, bob = yield
 
-        alice_conn, bob_conn = await self.onboard_and_issue_v1(
-            alice, bob, first_cred_attrs, supports_revocation
-        )
+        alice_conn, bob_conn = await self.onboard_and_issue_v1(alice, bob, first_cred_attrs, supports_revocation)
 
         alice_conn, bob_conn = await self.onboard_and_issue_v1(
             alice, bob, second_cred_attrs, supports_revocation, (alice_conn, bob_conn)
