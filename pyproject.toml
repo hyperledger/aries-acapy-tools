@@ -18,7 +18,7 @@ readme = "README.md"
 repository = "https://github.com/indicio-tech/acapy-wallet-upgrade"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 aiosqlite = "~=0.17"
 aries-askar = "~=0.2"
 asyncpg = "~=0.22"
@@ -37,9 +37,11 @@ controller = {git = "https://github.com/indicio-tech/acapy-minimal-example.git",
 docker = "^6.0.1"
 
 [tool.poetry.scripts]
-askar-upgrade = "acapy_wallet_upgrade.__main__:main"
-
+askar-upgrade = "acapy_wallet_upgrade.__main__:entrypoint"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+markers = ["e2e"]
