@@ -47,7 +47,7 @@ class Wallet(ABC):
         """Fetch metadata value from the database."""
 
     @abstractmethod
-    async def fetch_pending_items(self, limit: int) -> AsyncIterator[Sequence[Tuple]]:
+    def fetch_pending_items(self, limit: int) -> AsyncIterator[Sequence[Tuple]]:
         """Fetch un-updated items."""
 
     @abstractmethod

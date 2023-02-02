@@ -184,7 +184,7 @@ class SqliteWallet(Wallet):
         """Update items in the database."""
         del_ids = []
         for item in items:
-            del_ids = item["id"]
+            del_ids.append(item["id"])
             ins = await self._conn.execute(
                 """
                 INSERT INTO items (profile_id, kind, category, name, value)
@@ -201,5 +201,9 @@ class SqliteWallet(Wallet):
                     """,
                     ((item_id, *tag) for tag in item["tags"]),
                 )
-        await self._conn.execute("DELETE FROM items_old WHERE id IN (?1)", (del_ids,))
+        await self._conn.execute(
+            "DELETE FROM items_old WHERE id IN ({})".format(
+                ",".join([str(del_id) for del_id in del_ids])
+            )
+        )
         await self._conn.commit()
