@@ -155,7 +155,7 @@ class MigrationTestCases:
             alice_conn.connection_id,
             requested_attributes=requested_attributes,
         )
-        assert alice_pres_ex_askar.state == "presentation-received"
+        assert alice_pres_ex_askar.state == "done"
         assert alice_pres_ex_askar.verified == "true"
 
     def credentials_with_revocation(
