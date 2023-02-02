@@ -15,21 +15,20 @@ from controller.protocols import (
 
 class MigrationTestCases:
     def __init__(self):
-        now = int(time.time())
         self._cases = (
             self.connections(),
             self.credentials_without_revocation(),
             self.credentials_without_revocation_v2(),
             self.credentials_with_revocation(),
-            # self.revoked_credential(
-            #    {"first_name": "Bob", "last_name": "Builder"},
-            #    [
-            #        {
-            #            "name": "first_name",
-            #        }
-            #    ],
-            #    supports_revocation=True,
-            # ),
+            self.revoked_credential(
+                {"first_name": "Bob", "last_name": "Builder"},
+                [
+                    {
+                        "name": "first_name",
+                    }
+                ],
+                supports_revocation=True,
+            ),
             self.large_credential_without_revocation(),
             self.composite_credential_proof(
                 {"nick_name": "Bob", "last_name": "Builder"},
