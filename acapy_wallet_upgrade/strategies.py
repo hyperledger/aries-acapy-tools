@@ -4,6 +4,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 from typing import Dict, Optional, Union, cast
@@ -22,6 +23,7 @@ from .pg_connection import PgConnection, PgWallet
 from .pg_mwst_connection import PgMWSTConnection
 from .sqlite_connection import SqliteConnection
 
+LOGGER = logging.getLogger(__name__)
 
 # Constants
 CHACHAPOLY_KEY_LEN = 32
@@ -432,6 +434,10 @@ class Strategy(ABC):
         await wallet.insert_profile(name, enc_pk)
         return profile_key
 
+    async def retrieve_wallet_ids(self, conn):
+        wallet_id_records = await conn.fetch("""SELECT wallet_id FROM metadata""")
+        return [wallet_id[0] for wallet_id in wallet_id_records]
+
     @abstractmethod
     async def run(self):
         """Perform the upgrade."""
@@ -476,12 +482,10 @@ class MwstAsProfilesStrategy(Strategy):
         uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
-        allow_missing_wallet: Optional[bool] = None,
     ):
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
-        self.allow_missing_wallet = allow_missing_wallet
 
     async def init_profile(
         self, wallet: Wallet, name: str, base_indy_key: dict, indy_key: dict
@@ -525,6 +529,14 @@ class MwstAsProfilesStrategy(Strategy):
                 cast(str, record.name),
                 settings["wallet.key"],
             )
+
+    async def check_for_leftover_wallets(self, old_conn, migrated_wallets):
+        retrieved_wallets = await self.retrieve_wallet_ids(old_conn)
+        leftover_wallets = [
+            wallet for wallet in retrieved_wallets if wallet not in migrated_wallets
+        ]
+        if len(leftover_wallets) > 0:
+            print(f"The following wallets were not migrated: {leftover_wallets}")
 
     async def create_sub_config(self, conn: DbConnection, indy_key: dict):
         pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
@@ -580,12 +592,8 @@ class MwstAsProfilesStrategy(Strategy):
                 base_conn.uri,
                 self.base_wallet_key,
             )
-
-            # TODO delete? The sub wallets may not completely cover the list of
-            # wallets in the MWST DB. Warn? Note in docs?
-            # await self.conn.check_missing_wallet_flag(
-            #     self.wallet_info, self.allow_missing_wallet
-            # )
+            # Track migrated wallets
+            migrated_wallets = [self.base_wallet_name]
 
             wallet_ids = []
             async for wallet_name, wallet_id, wallet_key in self.get_wallet_info(
@@ -596,6 +604,8 @@ class MwstAsProfilesStrategy(Strategy):
                 await self.migrate_one_profile(
                     wallet, base_indy_key, wallet_id, wallet_key
                 )
+                migrated_wallets.append(wallet_name)
+            await self.check_for_leftover_wallets(source, migrated_wallets)
 
             await sub_conn.finish_upgrade()
         finally:
@@ -631,13 +641,7 @@ class MwstAsStoresStrategy(Strategy):
         """Verify that the wallet names passed in align with
         the wallet names found in the database.
         """
-        wallet_id_list = await conn.fetch(
-            """
-            SELECT wallet_id FROM metadata
-            """
-        )
-        retrieved_wallet_keys = [wallet_id[0] for wallet_id in wallet_id_list]
-
+        retrieved_wallet_keys = await self.retrieve_wallet_ids(conn)
         for wallet_id in wallet_keys.keys():
             if wallet_id not in retrieved_wallet_keys:
                 raise UpgradeError(f"Wallet {wallet_id} not found in database")
