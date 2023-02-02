@@ -9,7 +9,7 @@ import re
 from typing import Dict, Optional, Union, cast
 from urllib.parse import urlparse
 
-from aries_askar import Key, Store
+from aries_askar import Key, Store, Session
 import asyncpg
 import base58
 import cbor2
@@ -177,228 +177,213 @@ class Strategy(ABC):
         keys["salt"] = salt
         return keys
 
+    async def batched_fetch_all(self, txn: Session, category: str, limit: int = 50):
+        while True:
+            items = await txn.fetch_all(category, limit=limit)
+            if not items:
+                break
+            for row in items:
+                yield row
+
+    async def update_keys(self, store: Store):
+        print("Updating keys...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(txn, "Indy::Key"):
+                await txn.remove("Indy::Key", row.name)
+                meta = await txn.fetch("Indy::KeyMetadata", row.name)
+                if meta:
+                    await txn.remove("Indy::KeyMetadata", meta.name)
+                    meta = json.loads(meta.value)["value"]
+                key_sk = base58.b58decode(json.loads(row.value)["signkey"])
+                key = Key.from_secret_bytes("ed25519", key_sk[:32])
+                await txn.insert_key(row.name, key, metadata=meta)
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_master_keys(self, store: Store):
+        print("Updating master secret(s)...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(
+                txn, "Indy::MasterSecret", limit=None
+            ):
+                if upd_count > 0:
+                    raise Exception("Encountered multiple master secrets")
+                await txn.remove("Indy::MasterSecret", row.name)
+                await txn.insert("master_secret", "default", value=row.value)
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_dids(self, store: Store):
+        print("Updating DIDs...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(txn, "Indy::Did"):
+                await txn.remove("Indy::Did", row.name)
+                info = json.loads(row.value)
+                meta = await txn.fetch("Indy::DidMetadata", row.name)
+                if meta:
+                    await txn.remove("Indy::DidMetadata", meta.name)
+                    meta = json.loads(meta.value)["value"]
+                    with contextlib.suppress(json.JSONDecodeError):
+                        meta = json.loads(meta)
+                await txn.insert(
+                    "did",
+                    row.name,
+                    value_json={
+                        "did": info["did"],
+                        "verkey": info["verkey"],
+                        "metadata": meta,
+                    },
+                    tags={"verkey": info["verkey"]},
+                )
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_schemas(self, store: Store):
+        print("Updating stored schemas...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(txn, "Indy::Schema"):
+                await txn.remove("Indy::Schema", row.name)
+                await txn.insert(
+                    "schema",
+                    row.name,
+                    value=row.value,
+                )
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_cred_defs(self, store: Store):
+        print("Updating stored credential definitions...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(txn, "Indy::CredentialDefinition"):
+                await txn.remove("Indy::CredentialDefinition", row.name)
+                sid = await txn.fetch("Indy::SchemaId", row.name)
+                if not sid:
+                    raise Exception(
+                        f"Schema ID not found for credential definition: {row.name}"
+                    )
+                sid = sid.value.decode("utf-8")
+                await txn.insert(
+                    "credential_def",
+                    row.name,
+                    value=row.value,
+                    tags={"schema_id": sid},
+                )
+                priv = await txn.fetch("Indy::CredentialDefinitionPrivateKey", row.name)
+                if priv:
+                    await txn.remove("Indy::CredentialDefinitionPrivateKey", priv.name)
+                    await txn.insert(
+                        "credential_def_private",
+                        priv.name,
+                        value=priv.value,
+                    )
+                proof = await txn.fetch(
+                    "Indy::CredentialDefinitionCorrectnessProof", row.name
+                )
+                if proof:
+                    await txn.remove(
+                        "Indy::CredentialDefinitionCorrectnessProof", proof.name
+                    )
+                    value = json.loads(proof.value)["value"]
+                    await txn.insert(
+                        "credential_def_key_proof",
+                        proof.name,
+                        value_json=value,
+                    )
+                upd_count += 1
+
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_rev_reg_defs(self, store: Store):
+        print("Updating stored revocation registry definitions...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(
+                txn, "Indy::RevocationRegistryDefinition"
+            ):
+                await txn.remove("Indy::RevocationRegistryDefinition", row.name)
+                await txn.insert("revocation_reg_def", row.name, value=row.value)
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_rev_reg_keys(self, store: Store):
+        print("Updating stored revocation registry keys...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(
+                txn, "Indy::RevocationRegistryDefinitionPrivate"
+            ):
+                await txn.remove("Indy::RevocationRegistryDefinitionPrivate", row.name)
+                await txn.insert(
+                    "revocation_reg_def_private", row.name, value=row.value
+                )
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_rev_reg_states(self, store: Store):
+        print("Updating stored revocation registry states...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(txn, "Indy::RevocationRegistry"):
+                await txn.remove("Indy::RevocationRegistry", row.name)
+                await txn.insert("revocation_reg", row.name, value=row.value)
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_rev_reg_info(self, store: Store):
+        print("Updating stored revocation registry info...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(
+                txn, "Indy::RevocationRegistryInfo"
+            ):
+                await txn.remove("Indy::RevocationRegistryInfo", row.name)
+                await txn.insert("revocation_reg_info", row.name, value=row.value)
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
+    async def update_creds(self, store: Store):
+        print("Updating stored credentials...", end="")
+        upd_count = 0
+        async with store.transaction() as txn:
+            async for row in self.batched_fetch_all(txn, "Indy::Credential"):
+                await txn.remove("Indy::Credential", row.name)
+                cred_data = row.value_json
+                tags = self._credential_tags(cred_data)
+                await txn.insert("credential", row.name, value=row.value, tags=tags)
+                upd_count += 1
+            await txn.commit()
+        print(f" {upd_count} updated")
+
     async def convert_items_to_askar(
         self, uri: str, wallet_key: str, profile: str = None
     ):
         print("Opening wallet with Askar...")
         store = await Store.open(uri, pass_key=wallet_key, profile=profile)
 
-        print("Updating keys...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                keys = await txn.fetch_all("Indy::Key", limit=50)
-                if not keys:
-                    break
-                for row in keys:
-                    await txn.remove("Indy::Key", row.name)
-                    meta = await txn.fetch("Indy::KeyMetadata", row.name)
-                    if meta:
-                        await txn.remove("Indy::KeyMetadata", meta.name)
-                        meta = json.loads(meta.value)["value"]
-                    key_sk = base58.b58decode(json.loads(row.value)["signkey"])
-                    key = Key.from_secret_bytes("ed25519", key_sk[:32])
-                    await txn.insert_key(row.name, key, metadata=meta)
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating master secret(s)...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                ms = await txn.fetch_all("Indy::MasterSecret")
-                if not ms:
-                    break
-                elif len(ms) > 1:
-                    raise Exception("Encountered multiple master secrets")
-                else:
-                    row = ms[0]
-                    await txn.remove("Indy::MasterSecret", row.name)
-                    await txn.insert("master_secret", "default", value=row.value)
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating DIDs...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                dids = await txn.fetch_all("Indy::Did", limit=50)
-                if not dids:
-                    break
-                for row in dids:
-                    await txn.remove("Indy::Did", row.name)
-                    info = json.loads(row.value)
-                    meta = await txn.fetch("Indy::DidMetadata", row.name)
-                    if meta:
-                        await txn.remove("Indy::DidMetadata", meta.name)
-                        meta = json.loads(meta.value)["value"]
-                        with contextlib.suppress(json.JSONDecodeError):
-                            meta = json.loads(meta)
-                    await txn.insert(
-                        "did",
-                        row.name,
-                        value_json={
-                            "did": info["did"],
-                            "verkey": info["verkey"],
-                            "metadata": meta,
-                        },
-                        tags={"verkey": info["verkey"]},
-                    )
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating stored schemas...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                schemas = await txn.fetch_all("Indy::Schema", limit=50)
-                if not schemas:
-                    break
-                for row in schemas:
-                    await txn.remove("Indy::Schema", row.name)
-                    await txn.insert(
-                        "schema",
-                        row.name,
-                        value=row.value,
-                    )
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating stored credential definitions...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                cred_defs = await txn.fetch_all("Indy::CredentialDefinition", limit=50)
-                if not cred_defs:
-                    break
-                for row in cred_defs:
-                    await txn.remove("Indy::CredentialDefinition", row.name)
-                    sid = await txn.fetch("Indy::SchemaId", row.name)
-                    if not sid:
-                        raise Exception(
-                            f"Schema ID not found for credential definition: {row.name}"
-                        )
-                    sid = sid.value.decode("utf-8")
-                    await txn.insert(
-                        "credential_def",
-                        row.name,
-                        value=row.value,
-                        tags={"schema_id": sid},
-                    )
-
-                    priv = await txn.fetch(
-                        "Indy::CredentialDefinitionPrivateKey", row.name
-                    )
-                    if priv:
-                        await txn.remove(
-                            "Indy::CredentialDefinitionPrivateKey", priv.name
-                        )
-                        await txn.insert(
-                            "credential_def_private",
-                            priv.name,
-                            value=priv.value,
-                        )
-                    proof = await txn.fetch(
-                        "Indy::CredentialDefinitionCorrectnessProof", row.name
-                    )
-                    if proof:
-                        await txn.remove(
-                            "Indy::CredentialDefinitionCorrectnessProof", proof.name
-                        )
-                        value = json.loads(proof.value)["value"]
-                        await txn.insert(
-                            "credential_def_key_proof",
-                            proof.name,
-                            value_json=value,
-                        )
-                    upd_count += 1
-
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating stored revocation registry definitions...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                reg_defs = await txn.fetch_all(
-                    "Indy::RevocationRegistryDefinition", limit=50
-                )
-                if not reg_defs:
-                    break
-                for row in reg_defs:
-                    await txn.remove("Indy::RevocationRegistryDefinition", row.name)
-                    await txn.insert("revocation_reg_def", row.name, value=row.value)
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating stored revocation registry keys...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                reg_defs = await txn.fetch_all(
-                    "Indy::RevocationRegistryDefinitionPrivate", limit=50
-                )
-                if not reg_defs:
-                    break
-                for row in reg_defs:
-                    await txn.remove(
-                        "Indy::RevocationRegistryDefinitionPrivate", row.name
-                    )
-                    await txn.insert(
-                        "revocation_reg_def_private", row.name, value=row.value
-                    )
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating stored revocation registry states...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                reg_defs = await txn.fetch_all("Indy::RevocationRegistry", limit=50)
-                if not reg_defs:
-                    break
-                for row in reg_defs:
-                    await txn.remove("Indy::RevocationRegistry", row.name)
-                    await txn.insert("revocation_reg", row.name, value=row.value)
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating stored revocation registry info...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                reg_defs = await txn.fetch_all("Indy::RevocationRegistryInfo", limit=50)
-                if not reg_defs:
-                    break
-                for row in reg_defs:
-                    await txn.remove("Indy::RevocationRegistryInfo", row.name)
-                    await txn.insert("revocation_reg_info", row.name, value=row.value)
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
-
-        print("Updating stored credentials...", end="")
-        upd_count = 0
-        while True:
-            async with store.transaction() as txn:
-                creds = await txn.fetch_all("Indy::Credential", limit=50)
-                if not creds:
-                    break
-                for row in creds:
-                    await txn.remove("Indy::Credential", row.name)
-                    cred_data = row.value_json
-                    tags = self._credential_tags(cred_data)
-                    await txn.insert("credential", row.name, value=row.value, tags=tags)
-                    upd_count += 1
-                await txn.commit()
-        print(f" {upd_count} updated")
+        await self.update_keys(store)
+        await self.update_master_keys(store)
+        await self.update_dids(store)
+        await self.update_schemas(store)
+        await self.update_cred_defs(store)
+        await self.update_rev_reg_defs(store)
+        await self.update_rev_reg_keys(store)
+        await self.update_rev_reg_states(store)
+        await self.update_rev_reg_info(store)
+        await self.update_creds(store)
 
         print("Closing wallet")
         await store.close()
