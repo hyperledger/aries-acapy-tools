@@ -119,7 +119,8 @@ This strategy implements migration for a PostgreSQL database that uses the `Mult
             }
 ```
 
-* `allow_missing_wallet` - [flag](#allow-missing-wallet-check) to allow wallets in database to not be migrated (bool)
+* `allow_missing_wallet` - flag to allow wallets in database to not be migrated (bool)
+    * There is a check to ensure that the wallet names passed into the migration script align with the wallet names retrieved from the database to be migrated. If a wallet name is passed in that does not correspond to an existing wallet in the database, an `UpgradeError` is raised. If a wallet name that corresponds to an existing wallet in the database is not passed into the script to be migrated, a `MissingWalletError` is raised. If the user wishes to migrate some, but not all, of the wallets in a `MultiWalletSingleTable` database, they can bypass the `MissingWalletError` by setting the `--allow-missing-wallet` argument as `True`.
 
 #### Run
 ```
@@ -148,7 +149,6 @@ This strategy implements migration for a PostgreSQL database that uses the `Mult
             }
 ```
 
-* `allow_missing_wallet` - [flag](#allow-missing-wallet-check) to allow wallets in database to not be migrated (bool)
 
 #### Run
 ```
@@ -161,10 +161,6 @@ After migration, the startup command must include the following argument:
 --multitenancy-config wallet_type=askar-profile
 ```
 
-
-#### --allow-missing-wallet check
-
-There is a check to ensure that the wallet names passed into the migration script align with the wallet names retrieved from the database to be migrated. If a wallet name is passed in that does not correspond to an existing wallet in the database, an `UpgradeError` is raised. If a wallet name that corresponds to an existing wallet in the database is not passed into the script to be migrated, a `MissingWalletError` is raised. If the user wishes to migrate some, but not all, of the wallets in a `MultiWalletSingleTable` database, they can bypass the `MissingWalletError` by setting the `--allow-missing-wallet` argument as `True`.
 
 ## Wallet location
 

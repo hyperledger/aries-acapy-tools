@@ -95,9 +95,7 @@ async def main(
         if not base_wallet_key:
             raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
-        strategy_inst = MwstAsProfilesStrategy(
-            uri, base_wallet_name, base_wallet_key, allow_missing_wallet
-        )
+        strategy_inst = MwstAsProfilesStrategy(uri, base_wallet_name, base_wallet_key)
 
     elif strategy == "mwst-as-stores":
         if parsed.scheme != "postgres":
