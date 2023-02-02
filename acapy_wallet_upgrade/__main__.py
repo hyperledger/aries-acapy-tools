@@ -30,6 +30,7 @@ def config():
     parser.add_argument("--wallet-keys", type=str, action="store")
     parser.add_argument("--allow-missing-wallet", type=str, action="store")
     parser.add_argument("--delete-indy-wallets", type=str, action="store")
+    parser.add_argument("--limit", type=str, action="store")
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     if args.strategy not in ("dbpw", "mwst-as-profiles", "mwst-as-stores"):
@@ -70,6 +71,7 @@ async def main(
     wallet_keys: Optional[Dict[str, str]] = None,
     allow_missing_wallet: Optional[bool] = False,
     delete_indy_wallets: Optional[bool] = False,
+    limit: Optional[int] = 50,
 ):
     logging.basicConfig(level=logging.WARN)
     parsed = urlparse(uri)
@@ -86,7 +88,7 @@ async def main(
         if not wallet_key:
             raise ValueError("Wallet key required for dbpw strategy")
 
-        strategy_inst = DbpwStrategy(conn, wallet_name, wallet_key)
+        strategy_inst = DbpwStrategy(conn, wallet_name, wallet_key, limit)
 
     elif strategy == "mwst-as-profiles":
         if parsed.scheme != "postgres":
@@ -108,7 +110,9 @@ async def main(
         if not wallet_keys:
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
-        strategy_inst = MwstAsStoresStrategy(uri, wallet_keys, allow_missing_wallet)
+        strategy_inst = MwstAsStoresStrategy(
+            uri, wallet_keys, allow_missing_wallet, limit
+        )
 
     else:
         raise UpgradeError("Invalid strategy")
