@@ -536,9 +536,7 @@ class MwstAsProfilesStrategy(Strategy):
             wallet for wallet in retrieved_wallets if wallet not in migrated_wallets
         ]
         if len(leftover_wallets) > 0:
-            LOGGER.warning(
-                f"The following wallets were not migrated: {leftover_wallets}"
-            )
+            print(f"The following wallets were not migrated: {leftover_wallets}")
 
     async def create_sub_config(self, conn: DbConnection, indy_key: dict):
         pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
