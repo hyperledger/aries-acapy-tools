@@ -31,11 +31,11 @@ def config():
     parser.add_argument("--allow-missing-wallet", action="store_true")
     parser.add_argument("--delete-indy-wallets", action="store_true")
     parser.add_argument(
-        "--should-confirm",
+        "--skip-confirmation",
         action="store_true",
         help=(
-            "Indicate if user wants to be prompted for confirmation before "
-            "deleting original Indy wallets database."
+            "Indicate if user does not want to be prompted for confirmation "
+            "before deleting original Indy wallets database."
         ),
     )
     args, _ = parser.parse_known_args(sys.argv[1:])
@@ -78,7 +78,7 @@ async def main(
     wallet_keys: Optional[Dict[str, str]] = None,
     allow_missing_wallet: Optional[bool] = False,
     delete_indy_wallets: Optional[bool] = False,
-    should_confirm: Optional[bool] = False,
+    skip_confirmation: Optional[bool] = False,
 ):
     logging.basicConfig(level=logging.WARN)
     parsed = urlparse(uri)
@@ -107,7 +107,11 @@ async def main(
             raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
         strategy_inst = MwstAsProfilesStrategy(
-            uri, base_wallet_name, base_wallet_key, delete_indy_wallets, should_confirm
+            uri,
+            base_wallet_name,
+            base_wallet_key,
+            delete_indy_wallets,
+            skip_confirmation,
         )
 
     elif strategy == "mwst-as-stores":
@@ -118,7 +122,7 @@ async def main(
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
         strategy_inst = MwstAsStoresStrategy(
-            uri, wallet_keys, allow_missing_wallet, delete_indy_wallets, should_confirm
+            uri, wallet_keys, allow_missing_wallet, delete_indy_wallets, skip_confirm
         )
 
     else:

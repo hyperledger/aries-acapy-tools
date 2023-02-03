@@ -454,7 +454,9 @@ class Strategy(ABC):
 
     async def determine_wallet_deletion(self):
         if self.delete_indy_wallets:
-            if sys.stdout.isatty() and self.should_confirm:
+            if self.skip_confirmation:
+                await self.delete_wallets_database()
+            elif sys.stdout.isatty():
                 response = input(
                     "Would you like to delete the original Indy wallet database? Y/N "
                 )
@@ -463,7 +465,7 @@ class Strategy(ABC):
                 else:
                     print("Indy wallets database not deleted.")
             else:
-                await self.delete_wallets_database()
+                print("Indy wallets database not deleted.")
         else:
             print("Indy wallets database not deleted.")
 
@@ -512,13 +514,13 @@ class MwstAsProfilesStrategy(Strategy):
         base_wallet_name: str,
         base_wallet_key: str,
         delete_indy_wallets: Optional[bool] = False,
-        should_confirm: Optional[bool] = False,
+        skip_confirmation: Optional[bool] = False,
     ):
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
         self.delete_indy_wallets = delete_indy_wallets
-        self.should_confirm = should_confirm
+        self.skip_confirmation = skip_confirmation
 
     async def init_profile(
         self, wallet: Wallet, name: str, base_indy_key: dict, indy_key: dict
@@ -667,13 +669,13 @@ class MwstAsStoresStrategy(Strategy):
         wallet_keys: Dict[str, str],
         allow_missing_wallet: Optional[bool] = False,
         delete_indy_wallets: Optional[bool] = False,
-        should_confirm: Optional[bool] = False,
+        skip_confirmation: Optional[bool] = False,
     ):
         self.uri = uri
         self.wallet_keys = wallet_keys
         self.allow_missing_wallet = allow_missing_wallet
         self.delete_indy_wallets = delete_indy_wallets
-        self.should_confirm = should_confirm
+        self.skip_confirmation = skip_confirmation
 
     def create_new_db_connection(self, wallet_name: str):
         parsed = urlparse(self.uri)
