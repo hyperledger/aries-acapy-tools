@@ -20,7 +20,8 @@ async def migrate_pg_db(
     base_wallet_name: Optional[str] = None,
     base_wallet_key: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
-    allow_missing_wallet=None,
+    allow_missing_wallet: Optional[bool] = False,
+    delete_indy_wallets: Optional[bool] = False,
 ):
     """Run migration script on postgresql database."""
     db_host = "localhost"
@@ -43,6 +44,7 @@ async def migrate_pg_db(
         base_wallet_key,
         wallet_keys,
         allow_missing_wallet,
+        delete_indy_wallets,
     )
 
 
@@ -165,6 +167,22 @@ async def test_migration_mwst_as_profiles(postgres_with_volume):
         strategy="mwst-as-profiles",
         base_wallet_name="agency",
         base_wallet_key="agency_insecure0",
+    )
+
+
+@pytest.mark.asyncio
+async def test_migration_mwst_as_profiles_leftover_wallet_warning(postgres_with_volume):
+    """
+    Run the migration script with the db in the docker container.
+    """
+    port = postgres_with_volume("mt-mwst-leftover-wallet")
+    await migrate_pg_db(
+        db_port=port,
+        db_name="wallets",
+        strategy="mwst-as-profiles",
+        base_wallet_name="agency",
+        base_wallet_key="agency_insecure0",
+        delete_indy_wallets=True,
     )
 
 

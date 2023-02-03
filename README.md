@@ -26,6 +26,7 @@ make sqlite
 make dbpw
 make mt-mwst
 make mwst
+make mt-mwst-leftover-wallet
 ```
 
 #### Run tests
