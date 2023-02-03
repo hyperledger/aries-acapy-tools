@@ -1,4 +1,4 @@
-all: sqlite dbpw mwst mt-mwst
+all: sqlite dbpw mwst mt-mwst mt-mwst-leftover-wallet
 
 juggernaut:
 	docker-compose build juggernaut-sqlite
