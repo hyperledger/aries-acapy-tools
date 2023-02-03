@@ -482,10 +482,12 @@ class MwstAsProfilesStrategy(Strategy):
         uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
+        delete_indy_wallets: Optional[bool] = False,
     ):
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
+        self.delete_indy_wallets = delete_indy_wallets
 
     async def init_profile(
         self, wallet: Wallet, name: str, base_indy_key: dict, indy_key: dict
@@ -530,6 +532,10 @@ class MwstAsProfilesStrategy(Strategy):
                 settings["wallet.key"],
             )
 
+    async def create_sub_config(self, conn: DbConnection, indy_key: dict):
+        pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
+        await conn.create_config(key=pass_key)
+
     async def check_for_leftover_wallets(self, old_conn, migrated_wallets):
         retrieved_wallets = await self.retrieve_wallet_ids(old_conn)
         leftover_wallets = [
@@ -537,10 +543,23 @@ class MwstAsProfilesStrategy(Strategy):
         ]
         if len(leftover_wallets) > 0:
             print(f"The following wallets were not migrated: {leftover_wallets}")
+            if self.delete_indy_wallets:
+                print(
+                    "Indy wallets will not be deleted because there are wallets that were not migrated"
+                )
+                self.delete_indy_wallets = False
 
-    async def create_sub_config(self, conn: DbConnection, indy_key: dict):
-        pass_key = "kdf:argon2i:13:mod?salt=" + indy_key["salt"].hex()
-        await conn.create_config(key=pass_key)
+    async def delete_wallets_database(self):
+        parts = urlparse(self.uri)
+        sys_conn = await asyncpg.connect(
+            host=parts.hostname,
+            port=parts.port or 5432,
+            user=parts.username,
+            password=parts.password,
+            database="template1",
+        )
+        await sys_conn.execute(f"DROP DATABASE {parts.path[1:]}")
+        await sys_conn.close()
 
     async def run(self):
         """Perform the upgrade.
@@ -617,6 +636,8 @@ class MwstAsProfilesStrategy(Strategy):
             await self.convert_items_to_askar(
                 sub_conn.uri, self.base_wallet_key, wallet_id
             )
+        if self.delete_indy_wallets:
+            await self.delete_wallets_database()
 
 
 class MwstAsStoresStrategy(Strategy):
@@ -626,7 +647,7 @@ class MwstAsStoresStrategy(Strategy):
         self,
         uri: str,
         wallet_keys: Dict[str, str],
-        allow_missing_wallet: Optional[bool] = None,
+        allow_missing_wallet: Optional[bool] = False,
     ):
         self.uri = uri
         self.wallet_keys = wallet_keys
