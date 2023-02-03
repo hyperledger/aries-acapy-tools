@@ -32,7 +32,7 @@ def config():
     )
     parser.add_argument(
         "--wallet-name",
-        action="store_const",
+        type=str,
         help=(
             "Specify name of wallet to be migrated for DatabasePerWallet "
             "(dbpw) migration strategy."
@@ -40,7 +40,7 @@ def config():
     )
     parser.add_argument(
         "--wallet-key",
-        action="store_const",
+        type=str,
         help=(
             "Specify key corresponding to the given name of the wallet to "
             "be migrated for database per wallet (dbpw) migration strategy."
@@ -48,7 +48,7 @@ def config():
     )
     parser.add_argument(
         "--base-wallet-name",
-        action="store_const",
+        type=str,
         help=(
             "Specify name of base wallet for the MultiWalletSingleTable as "
             "profiles (mwst-as-profiles) strategy. This base wallet and its "
@@ -57,7 +57,7 @@ def config():
     )
     parser.add_argument(
         "--base-wallet-key",
-        action="store_const",
+        type=str,
         help=(
             "Specific key corresponding to the given name of the base wallet "
             "for the MultiWalletSingleTable as profiles (mwst-as-profiles) "
@@ -66,7 +66,7 @@ def config():
     )
     parser.add_argument(
         "--wallet-keys",
-        action="store_const",
+        type=str,
         help=(
             "Specify mapping of wallet_name to wallet_key for all wallets "
             "to be migrated in the MultiWalletSingleTable as stores "
