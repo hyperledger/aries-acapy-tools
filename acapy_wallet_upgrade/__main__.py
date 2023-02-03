@@ -74,6 +74,14 @@ def config():
         ),
     )
     parser.add_argument(
+        "--limit",
+        type=int,
+        help=(
+            "Specify limit to indicate the number of items to process in "
+            "each batch."
+        )
+    )
+    parser.add_argument(
         "--allow-missing-wallet",
         action="store_true",
         help=(
