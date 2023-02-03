@@ -174,21 +174,43 @@ Indy-SDK and Askar store their wallets inside different directories:
 It is left to the user to move their wallet(s) into the desired location.
 
 ## Step-by-step Acapy Wallet Migration Guide
-0. Stop any agents that are currently using the wallet: Before beginning the migration process, make sure that any agents or applications that are currently using the wallet have been stopped to avoid any potential conflicts.
-1. Make a backup of your current wallet: It's important to create a backup of your current wallet before starting the migration process, just in case anything goes wrong.
-2.Prepare configuration: The migration script supports migration from Indy SQLite to Aries SQLite or from Indy PostgreSQL to Aries PostgreSQL. To prepare for the migration, you'll need to determine which [storage plugin](https://github.com/hyperledger/indy-sdk/tree/main/experimental/plugins/postgres_storage#wallet-management-modes) you are using and what information you will need to provide in the configuration.    
-    - SQLite:
-        - path to file
-    - PostgreSQL single wallet per data store:
-        - uri ...
-        - You must provide a JSON file with wallet keys and wallet ID
-    - PostgreSQL multiple wallets in a single table:
-        - uri ...
-        - You must provide a JSON file with wallet keys and wallet ID
-    - PostgreSQL multiple wallets in a single table shared pool:
-        - ...
-3. Execute the migration with configuration: Once you have the required information and configuration, you can execute the migration script. Make sure to follow the instructions carefully and double-check your inputs before starting the migration process.
+0. Stop any agents using the wallet: Before starting the migration process, make sure to stop any agents or applications that are currently using the wallet to avoid any potential conflicts.
+1. Backup your current wallet: It is important to create a backup of your current wallet before starting the migration process, in case anything goes wrong.
+2. Prepare configuration: The migration script supports migration from Indy SQLite to Aries SQLite or from Indy PostgreSQL to Aries PostgreSQL. Determine which database and [storage plugin](https://github.com/hyperledger/indy-sdk/tree/main/experimental/plugins/postgres_storage#wallet-management-modes) you are using and gather the necessary information for each scenario.
+    - Indy SQLite -> Aries SQLite:
+        - strategy: dbpw,
+        - uri: sqlite://`<path to sqlite db>`,
+        - wallet-name: `<name>`,
+        - wallet-key: `<password>`,    
+    - Indy PostgreSQL single wallet per data store -> Aries PostgreSQL single wallet per data store:
+        - strategy: dbpw,
+        - uri: postgres://`<user name>`:`<db user password>`@`<db host>`:`<db port>`/`<db name>`,
+        - wallet-name: `<name>`,
+        - wallet-key: `<password>`,    
+    - Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL multiple stores, one wallet per data store :
+        - strategy: mwst-as-stores,
+        - uri: postgres://`<user name>`:`<db user password>`@`<db host>`:`<db port>`/`<db name>`,
+        - wallet-name: `<name>`,
+        - wallet-key: `<password>`,    
+        - base-wallet-name: `<base wallet name>`,
+        - base-wallet-key: `<base wallet key>`,
+        - wallet-keys: `<path to json file with wallet keys>`,
+    - Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL single store, one wallet per profile :
+        - strategy: mwst-as-profiles,
+        - uri: postgres://`<user name>`:`<db user password>`@`<db host>`:`<db port>`/`<db name>`,
+        - wallet-name: `<name>`,
+        - wallet-key: `<password>`,    
+        - base-wallet-name: `<base wallet name>`,
+        - base-wallet-key: `<base wallet key>`,
+        - wallet-keys: `<path to json file with wallet keys>`,
+3. Execute the migration with configuration: Once you have the required information and configuration, execute the migration script. Make sure to follow the instructions carefully and double-check your inputs before starting the migration process, as it is a one-way process.
+```
+askar-upgrade --strategy dbpw --uri sqlite://<path to sqlite db> --wallet-name <wallet name> --wallet-key <wallet key>
+```
 
+Note: Exercise caution and thoroughness during the migration process and make sure to backup your wallet data before starting
 
-Note: Be cautious and thorough during the migration process, and make sure to backup your wallet data before starting. If you encounter any issues, reach out to the wallet's support team for assistance.
+### Multiple wallet Edge Cases
 
+- allow-missing-wallet, if you have wallets you do not want to migrate you can exclude them from the wallet keys file, and set this flag to true.
+- delete-indy-wallets, set this flag to true to delete wallets that did not migrate.
