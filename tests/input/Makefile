@@ -26,5 +26,11 @@ mt-mwst: | juggernaut
 	docker cp db:/var/lib/postgresql/data mt-mwst
 	docker-compose down -v
 
+mt-mwst-leftover-wallet: | juggernaut
+	docker-compose up -d carol-mwst
+	docker-compose run juggernaut-mt-mwst-leftover-wallet
+	docker cp db:/var/lib/postgresql/data mt-mwst-leftover-wallet
+	docker-compose down -v
+
 
 .PHONY: sqlite juggernaut
