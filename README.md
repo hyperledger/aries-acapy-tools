@@ -169,3 +169,23 @@ Indy-SDK and Askar store their wallets inside different directories:
 - Askar: `/home/<user>/.aries_cloudagent/wallet/<wallet name>`
 
 It is left to the user to move their wallet(s) into the desired location.
+
+## Step-by-step Acapy Wallet Migration Guide
+0. Stop any agents that are currently using the wallet: Before beginning the migration process, make sure that any agents or applications that are currently using the wallet have been stopped to avoid any potential conflicts.
+1. Make a backup of your current wallet: It's important to create a backup of your current wallet before starting the migration process, just in case anything goes wrong.
+2.Prepare configuration: The migration script supports migration from Indy SQLite to Aries SQLite or from Indy PostgreSQL to Aries PostgreSQL. To prepare for the migration, you'll need to determine which [storage plugin](https://github.com/hyperledger/indy-sdk/tree/main/experimental/plugins/postgres_storage#wallet-management-modes) you are using and what information you will need to provide in the configuration.    
+    - SQLite:
+        - path to file
+    - PostgreSQL single wallet per data store:
+        - uri ...
+        - You must provide a JSON file with wallet keys and wallet ID
+    - PostgreSQL multiple wallets in a single table:
+        - uri ...
+        - You must provide a JSON file with wallet keys and wallet ID
+    - PostgreSQL multiple wallets in a single table shared pool:
+        - ...
+3. Execute the migration with configuration: Once you have the required information and configuration, you can execute the migration script. Make sure to follow the instructions carefully and double-check your inputs before starting the migration process.
+
+
+Note: Be cautious and thorough during the migration process, and make sure to backup your wallet data before starting. If you encounter any issues, reach out to the wallet's support team for assistance.
+
