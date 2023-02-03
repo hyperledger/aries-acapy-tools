@@ -438,6 +438,18 @@ class Strategy(ABC):
         wallet_id_records = await conn.fetch("""SELECT wallet_id FROM metadata""")
         return [wallet_id[0] for wallet_id in wallet_id_records]
 
+    async def delete_wallets_database(self):
+        parts = urlparse(self.uri)
+        sys_conn = await asyncpg.connect(
+            host=parts.hostname,
+            port=parts.port or 5432,
+            user=parts.username,
+            password=parts.password,
+            database="template1",
+        )
+        await sys_conn.execute(f"DROP DATABASE {parts.path[1:]}")
+        await sys_conn.close()
+
     @abstractmethod
     async def run(self):
         """Perform the upgrade."""
@@ -549,18 +561,6 @@ class MwstAsProfilesStrategy(Strategy):
                 )
                 self.delete_indy_wallets = False
 
-    async def delete_wallets_database(self):
-        parts = urlparse(self.uri)
-        sys_conn = await asyncpg.connect(
-            host=parts.hostname,
-            port=parts.port or 5432,
-            user=parts.username,
-            password=parts.password,
-            database="template1",
-        )
-        await sys_conn.execute(f"DROP DATABASE {parts.path[1:]}")
-        await sys_conn.close()
-
     async def run(self):
         """Perform the upgrade.
 
@@ -648,10 +648,12 @@ class MwstAsStoresStrategy(Strategy):
         uri: str,
         wallet_keys: Dict[str, str],
         allow_missing_wallet: Optional[bool] = False,
+        delete_indy_wallets: Optional[bool] = False,
     ):
         self.uri = uri
         self.wallet_keys = wallet_keys
         self.allow_missing_wallet = allow_missing_wallet
+        self.delete_indy_wallets = delete_indy_wallets
 
     def create_new_db_connection(self, wallet_name: str):
         parsed = urlparse(self.uri)
@@ -678,6 +680,8 @@ class MwstAsStoresStrategy(Strategy):
                 await self.check_wallet_alignment(conn, wallet_keys)
             except MissingWalletError:
                 print("Running upgrade without migrating all wallets")
+                # Remaining wallets will not be deleted
+                self.delete_indy_wallets = False
         else:
             await self.check_wallet_alignment(conn, wallet_keys)
 
@@ -710,3 +714,5 @@ class MwstAsStoresStrategy(Strategy):
             await self.convert_items_to_askar(new_db_conn.uri, wallet_key)
 
         await source.close()
+        if self.delete_indy_wallets:
+            await self.delete_wallets_database()

@@ -108,7 +108,9 @@ async def main(
         if not wallet_keys:
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
-        strategy_inst = MwstAsStoresStrategy(uri, wallet_keys, allow_missing_wallet)
+        strategy_inst = MwstAsStoresStrategy(
+            uri, wallet_keys, allow_missing_wallet, delete_indy_wallets
+        )
 
     else:
         raise UpgradeError("Invalid strategy")
