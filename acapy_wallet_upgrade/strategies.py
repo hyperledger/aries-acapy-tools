@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import sys
 from typing import Dict, Optional, Union, cast
 from urllib.parse import urlparse
 
@@ -449,6 +450,22 @@ class Strategy(ABC):
         )
         await sys_conn.execute(f"DROP DATABASE {parts.path[1:]}")
         await sys_conn.close()
+        print("Indy wallets database deleted.")
+
+    async def determine_wallet_deletion(self):
+        if self.delete_indy_wallets:
+            if sys.stdout.isatty() and self.should_confirm:
+                response = input(
+                    "Would you like to delete the original Indy wallet database? Y/N "
+                )
+                if response in ["Y", "y", "yes", "Yes"]:
+                    await self.delete_wallets_database()
+                else:
+                    print("Indy wallets database not deleted.")
+            else:
+                await self.delete_wallets_database()
+        else:
+            print("Indy wallets database not deleted.")
 
     @abstractmethod
     async def run(self):
@@ -495,11 +512,13 @@ class MwstAsProfilesStrategy(Strategy):
         base_wallet_name: str,
         base_wallet_key: str,
         delete_indy_wallets: Optional[bool] = False,
+        should_confirm: Optional[bool] = False,
     ):
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
         self.delete_indy_wallets = delete_indy_wallets
+        self.should_confirm = should_confirm
 
     async def init_profile(
         self, wallet: Wallet, name: str, base_indy_key: dict, indy_key: dict
@@ -636,8 +655,7 @@ class MwstAsProfilesStrategy(Strategy):
             await self.convert_items_to_askar(
                 sub_conn.uri, self.base_wallet_key, wallet_id
             )
-        if self.delete_indy_wallets:
-            await self.delete_wallets_database()
+        await self.determine_wallet_deletion()
 
 
 class MwstAsStoresStrategy(Strategy):
@@ -649,11 +667,13 @@ class MwstAsStoresStrategy(Strategy):
         wallet_keys: Dict[str, str],
         allow_missing_wallet: Optional[bool] = False,
         delete_indy_wallets: Optional[bool] = False,
+        should_confirm: Optional[bool] = False,
     ):
         self.uri = uri
         self.wallet_keys = wallet_keys
         self.allow_missing_wallet = allow_missing_wallet
         self.delete_indy_wallets = delete_indy_wallets
+        self.should_confirm = should_confirm
 
     def create_new_db_connection(self, wallet_name: str):
         parsed = urlparse(self.uri)
@@ -712,7 +732,5 @@ class MwstAsStoresStrategy(Strategy):
                 await new_db_conn.close()
 
             await self.convert_items_to_askar(new_db_conn.uri, wallet_key)
-
         await source.close()
-        if self.delete_indy_wallets:
-            await self.delete_wallets_database()
+        await self.determine_wallet_deletion()
