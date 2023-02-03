@@ -29,6 +29,7 @@ def config():
     parser.add_argument("--base-wallet-key", type=str, action="store")
     parser.add_argument("--wallet-keys", type=str, action="store")
     parser.add_argument("--allow-missing-wallet", type=str, action="store")
+    parser.add_argument("--delete-indy-wallets", type=str, action="store")
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     if args.strategy not in ("dbpw", "mwst-as-profiles", "mwst-as-stores"):
@@ -67,7 +68,8 @@ async def main(
     base_wallet_name: Optional[str] = None,
     base_wallet_key: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
-    allow_missing_wallet: Optional[bool] = None,
+    allow_missing_wallet: Optional[bool] = False,
+    delete_indy_wallets: Optional[bool] = False,
 ):
     logging.basicConfig(level=logging.WARN)
     parsed = urlparse(uri)
@@ -95,7 +97,9 @@ async def main(
         if not base_wallet_key:
             raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
-        strategy_inst = MwstAsProfilesStrategy(uri, base_wallet_name, base_wallet_key)
+        strategy_inst = MwstAsProfilesStrategy(
+            uri, base_wallet_name, base_wallet_key, delete_indy_wallets
+        )
 
     elif strategy == "mwst-as-stores":
         if parsed.scheme != "postgres":

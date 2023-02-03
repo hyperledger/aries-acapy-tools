@@ -19,13 +19,16 @@ poetry shell
 
 ## Developer automated testing
 
+### Intermediate testing
+
 #### Generate database for each migration strategy:
 ```
-cd tests/input
+cd tests/intermediate/input
 make sqlite
 make dbpw
 make mt-mwst
 make mwst
+make mt-mwst-leftover-wallet
 ```
 
 #### Run tests

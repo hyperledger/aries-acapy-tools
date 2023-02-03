@@ -1,4 +1,4 @@
-all: sqlite dbpw mwst mt-mwst
+all: sqlite dbpw mwst mt-mwst mt-mwst-leftover-wallet
 
 juggernaut:
 	docker-compose build juggernaut-sqlite
@@ -24,6 +24,12 @@ mwst: | juggernaut
 mt-mwst: | juggernaut
 	docker-compose run juggernaut-mt-mwst
 	docker cp db:/var/lib/postgresql/data mt-mwst
+	docker-compose down -v
+
+mt-mwst-leftover-wallet: | juggernaut
+	docker-compose up -d carol-mwst
+	docker-compose run juggernaut-mt-mwst-leftover-wallet
+	docker cp db:/var/lib/postgresql/data mt-mwst-leftover-wallet
 	docker-compose down -v
 
 
