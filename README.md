@@ -175,42 +175,42 @@ It is left to the user to move their wallet(s) into the desired location.
 
 ## Step-by-step Acapy Wallet Migration Guide
 0. Stop any agents using the wallet: Before starting the migration process, make sure to stop any agents or applications that are currently using the wallet to avoid any potential conflicts.
-1. Backup your current wallet: It is important to create a backup of your current wallet before starting the migration process, in case anything goes wrong.
-2. Prepare configuration: The migration script supports migration from Indy SQLite to Aries SQLite or from Indy PostgreSQL to Aries PostgreSQL. Determine which database and [storage plugin](https://github.com/hyperledger/indy-sdk/tree/main/experimental/plugins/postgres_storage#wallet-management-modes) you are using and gather the necessary information for each scenario.
+1. Backup your current wallet: It is important to create a backup of your current wallet before starting the migration process, in case anything goes wrong. If using sqlite, copy the indy wallet from `/home/<user>/.indy_client/wallet/<wallet name>` to a temporary location you can run the migration script from. After running migration script you will be coping the resulting db into Askar location.
+2. Prepare configuration: The migration script supports migration from Indy SQLite to Aries SQLite or from Indy PostgreSQL to Aries PostgreSQL. Determine which database and [storage plugin](https://github.com/hyperledger/indy-sdk/tree/main/experimental/plugins/postgres_storage#wallet-management-modes) you are using and gather the necessary information for each scenario. Do note that postgres DBPW is the default wallet_scheme for Indy when using postgres storage plugin.
+wallet migration strategies include `dbpw`, `mwst-as-profiles`, `mwst-as-stores`. Postgres `MWST` wallet scheme serves both MultiWalletSingleTable and MultiWalletSingleTableSharedPool indy storage plugin management styles. The default configuration for ACA-Py multi-tenant agent is managed mode, which will migrate with `mwst-as-profiles` strategy. If you have a shared database for multiple ACA-Py instances but did not use Multi-tenancy you should use `mwst-as-stores` strategy. Here are examples of different strategies with minimum configuration.
     - Indy SQLite -> Aries SQLite:
-        - strategy: dbpw,
-        - uri: sqlite://`<path to sqlite db>`,
-        - wallet-name: `<name>`,
-        - wallet-key: `<password>`,    
+        ```
+        askar-upgrade --strategy dbpw --uri sqlite://<path to sqlite db> --wallet-name <wallet name> --wallet-key <wallet key>
+        ```
     - Indy PostgreSQL single wallet per data store -> Aries PostgreSQL single wallet per data store:
-        - strategy: dbpw,
-        - uri: postgres://`<user name>`:`<db user password>`@`<db host>`:`<db port>`/`<db name>`,
-        - wallet-name: `<name>`,
-        - wallet-key: `<password>`,    
+        ```
+        askar-upgrade --strategy dbpw --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> --wallet-name <wallet name> --wallet-key <wallet key>
+        ```
     - Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL multiple stores, one wallet per data store :
-        - strategy: mwst-as-stores,
-        - uri: postgres://`<user name>`:`<db user password>`@`<db host>`:`<db port>`/`<db name>`,
-        - wallet-name: `<name>`,
-        - wallet-key: `<password>`,    
-        - base-wallet-name: `<base wallet name>`,
-        - base-wallet-key: `<base wallet key>`,
-        - wallet-keys: `<path to json file with wallet keys>`,
+        ```
+        askar-upgrade --strategy mwst-as-stores --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> --wallet-name <wallet name> --wallet-key <wallet key> --base-wallet-name: <base wallet name> --base-wallet-key: <base wallet key> --wallet-keys: <path to json file with wallet keys>
+        ```
     - Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL single store, one wallet per profile :
-        - strategy: mwst-as-profiles,
-        - uri: postgres://`<user name>`:`<db user password>`@`<db host>`:`<db port>`/`<db name>`,
-        - wallet-name: `<name>`,
-        - wallet-key: `<password>`,    
-        - base-wallet-name: `<base wallet name>`,
-        - base-wallet-key: `<base wallet key>`,
-        - wallet-keys: `<path to json file with wallet keys>`,
-3. Execute the migration with configuration: Once you have the required information and configuration, execute the migration script. Make sure to follow the instructions carefully and double-check your inputs before starting the migration process, as it is a one-way process.
+        ```
+        askar-upgrade --strategy mwst-as-profiles --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> --wallet-name <wallet name> --wallet-key <wallet key> --base-wallet-name: <base wallet name> --base-wallet-key: <base wallet key> --wallet-keys: <path to json file with wallet keys>
+        ```
+    
+3. Execute the migration with configuration: Make sure you have followed the instructions carefully and double-check your inputs before starting the migration process, as it is a one-way process. DATA LOSS CAN OCCUR IF YOU ARE NOT CAREFUL. THIS PROCESS IS DELIBERATELY DESTRUCTIVE. BACKUP YOUR DATABASE BEFORE PROCEEDING.
+Example.
 ```
 askar-upgrade --strategy dbpw --uri sqlite://<path to sqlite db> --wallet-name <wallet name> --wallet-key <wallet key>
 ```
-
-Note: Exercise caution and thoroughness during the migration process and make sure to backup your wallet data before starting
-
+4. Update Acapy Configuration: If migrating sqlite copy the migrated db into `/home/<user>/.aries_cloudagent/wallet/<wallet name>`. Acapy configuration will need to be updated to reflect an Aries wallet. 
 ### Multiple wallet Edge Cases
-
-- allow-missing-wallet, if you have wallets you do not want to migrate you can exclude them from the wallet keys file, and set this flag to true.
-- delete-indy-wallets, set this flag to true to delete wallets that did not migrate.
+There is a confirmation before anything gets deleted, and you can opt out of that confirmation by including
+```
+--skip-confirmation
+```
+If you have wallets you do not want to migrate you can exclude them from the wallet keys file, and include
+```
+--allow-missing-wallet
+```
+To delete wallets that did not migrate include
+```
+- delete-indy-wallets
+```
