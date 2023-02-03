@@ -93,6 +93,14 @@ def config():
             "no wallets will be deleted."
         ),
     )
+    parser.add_argument(
+        "--skip-confirmation",
+        action="store_true",
+        help=(
+            "Indicate if user does not want to be prompted for confirmation "
+            "before deleting original Indy wallets database."
+        ),
+    )
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     if args.strategy == "dbpw":
@@ -128,6 +136,7 @@ async def main(
     wallet_keys: Optional[Dict[str, str]] = None,
     allow_missing_wallet: Optional[bool] = False,
     delete_indy_wallets: Optional[bool] = False,
+    skip_confirmation: Optional[bool] = False,
 ):
     logging.basicConfig(level=logging.WARN)
     parsed = urlparse(uri)
@@ -156,7 +165,11 @@ async def main(
             raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
         strategy_inst = MwstAsProfilesStrategy(
-            uri, base_wallet_name, base_wallet_key, delete_indy_wallets
+            uri,
+            base_wallet_name,
+            base_wallet_key,
+            delete_indy_wallets,
+            skip_confirmation,
         )
 
     elif strategy == "mwst-as-stores":
@@ -166,7 +179,9 @@ async def main(
         if not wallet_keys:
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
-        strategy_inst = MwstAsStoresStrategy(uri, wallet_keys, allow_missing_wallet)
+        strategy_inst = MwstAsStoresStrategy(
+            uri, wallet_keys, allow_missing_wallet, delete_indy_wallets, skip_confirm
+        )
 
     else:
         raise UpgradeError("Invalid strategy")
