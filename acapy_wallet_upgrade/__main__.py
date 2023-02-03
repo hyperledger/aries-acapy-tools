@@ -18,18 +18,81 @@ def config():
     parser = argparse.ArgumentParser("askar-upgarde")
     parser.add_argument(
         "--strategy",
-        type=str,
-        action="store",
         required=True,
+        choices=["dbpw", "mwst-as-profiles", "mwst-as-stores"],
+        help=(
+            "Specify migration strategy depending on database type, wallet "
+            "management mode, and agent type."
+        ),
     )
-    parser.add_argument("--uri", type=str, action="store", required=True)
-    parser.add_argument("--wallet-name", type=str, action="store")
-    parser.add_argument("--wallet-key", type=str, action="store")
-    parser.add_argument("--base-wallet-name", type=str, action="store")
-    parser.add_argument("--base-wallet-key", type=str, action="store")
-    parser.add_argument("--wallet-keys", type=str, action="store")
-    parser.add_argument("--allow-missing-wallet", action="store_true")
-    parser.add_argument("--delete-indy-wallets", action="store_true")
+    parser.add_argument(
+        "--uri",
+        required=True,
+        help=("Specify URI of database to be migrated."),
+    )
+    parser.add_argument(
+        "--wallet-name",
+        type=str,
+        help=(
+            "Specify name of wallet to be migrated for DatabasePerWallet "
+            "(dbpw) migration strategy."
+        ),
+    )
+    parser.add_argument(
+        "--wallet-key",
+        type=str,
+        help=(
+            "Specify key corresponding to the given name of the wallet to "
+            "be migrated for database per wallet (dbpw) migration strategy."
+        ),
+    )
+    parser.add_argument(
+        "--base-wallet-name",
+        type=str,
+        help=(
+            "Specify name of base wallet for the MultiWalletSingleTable as "
+            "profiles (mwst-as-profiles) strategy. This base wallet and its "
+            "subwallets will be migrated."
+        ),
+    )
+    parser.add_argument(
+        "--base-wallet-key",
+        type=str,
+        help=(
+            "Specific key corresponding to the given name of the base wallet "
+            "for the MultiWalletSingleTable as profiles (mwst-as-profiles) "
+            "strategy."
+        ),
+    )
+    parser.add_argument(
+        "--wallet-keys",
+        type=str,
+        help=(
+            "Specify mapping of wallet_name to wallet_key for all wallets "
+            "to be migrated in the MultiWalletSingleTable as stores "
+            "(mwst-as-stores) strategy."
+        ),
+    )
+    parser.add_argument(
+        "--allow-missing-wallet",
+        action="store_true",
+        help=(
+            "Allow the migration of some, but not all, of the wallets in a "
+            "MultiWalletSingleTable setup with standard agents to be migrated "
+            "using the MultiWalletSingleTable as stores (mwst-as-stores) "
+            "strategy. The remaining wallets will not be deleted."
+        ),
+    )
+    parser.add_argument(
+        "--delete-indy-wallets",
+        action="store_true",
+        help=(
+            "Delete Indy wallets after migration. If there are wallets that "
+            "were not migrated, whether or not the --allow-missing-wallet "
+            "flag is True, the --delete-indy-wallets flag is overwritten and "
+            "no wallets will be deleted."
+        ),
+    )
     parser.add_argument(
         "--skip-confirmation",
         action="store_true",
@@ -39,11 +102,6 @@ def config():
         ),
     )
     args, _ = parser.parse_known_args(sys.argv[1:])
-
-    if args.strategy not in ("dbpw", "mwst-as-profiles", "mwst-as-stores"):
-        raise ValueError(
-            "Strategy must be one of: dbpw, mwst-as-profiles, mwst-as-stores"
-        )
 
     if args.strategy == "dbpw":
         if not args.wallet_name:
