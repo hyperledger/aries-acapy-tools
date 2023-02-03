@@ -75,8 +75,7 @@ def config():
     )
     parser.add_argument(
         "--allow-missing-wallet",
-        type=bool,
-        action="store_false",
+        action="store_true",
         help=(
             "Allow the migration of some, but not all, of the wallets in a "
             "MultiWalletSingleTable setup with standard agents to be migrated "
@@ -86,8 +85,7 @@ def config():
     )
     parser.add_argument(
         "--delete-indy-wallets",
-        type=bool,
-        action="store_false",
+        action="store_true",
         help=(
             "Delete Indy wallets after migration. If there are wallets that "
             "were not migrated, whether or not the --allow-missing-wallet "
