@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import sys
 from typing import Dict, Optional, Union, cast
 from urllib.parse import urlparse
 
@@ -447,6 +448,36 @@ class Strategy(ABC):
         wallet_id_records = await conn.fetch("""SELECT wallet_id FROM metadata""")
         return [wallet_id[0] for wallet_id in wallet_id_records]
 
+    async def delete_wallets_database(self):
+        parts = urlparse(self.uri)
+        sys_conn = await asyncpg.connect(
+            host=parts.hostname,
+            port=parts.port or 5432,
+            user=parts.username,
+            password=parts.password,
+            database="template1",
+        )
+        await sys_conn.execute(f"DROP DATABASE {parts.path[1:]}")
+        await sys_conn.close()
+        print("Indy wallets database deleted.")
+
+    async def determine_wallet_deletion(self):
+        if self.delete_indy_wallets:
+            if self.skip_confirmation:
+                await self.delete_wallets_database()
+            elif sys.stdout.isatty():
+                response = input(
+                    "Would you like to delete the original Indy wallet database? Y/N "
+                )
+                if response in ["Y", "y", "yes", "Yes"]:
+                    await self.delete_wallets_database()
+                else:
+                    print("Indy wallets database not deleted.")
+            else:
+                print("Indy wallets database not deleted.")
+        else:
+            print("Indy wallets database not deleted.")
+
     @abstractmethod
     async def run(self):
         """Perform the upgrade."""
@@ -493,14 +524,16 @@ class MwstAsProfilesStrategy(Strategy):
         uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
-        delete_indy_wallets: Optional[bool] = False,
         limit: int = 50,
+        delete_indy_wallets: Optional[bool] = False,
+        skip_confirmation: Optional[bool] = False,
     ):
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
-        self.delete_indy_wallets = delete_indy_wallets
         self.limit = limit
+        self.delete_indy_wallets = delete_indy_wallets
+        self.skip_confirmation = skip_confirmation
 
     async def init_profile(
         self, wallet: Wallet, name: str, base_indy_key: dict, indy_key: dict
@@ -561,18 +594,6 @@ class MwstAsProfilesStrategy(Strategy):
                     "Indy wallets will not be deleted because there are wallets that were not migrated"
                 )
                 self.delete_indy_wallets = False
-
-    async def delete_wallets_database(self):
-        parts = urlparse(self.uri)
-        sys_conn = await asyncpg.connect(
-            host=parts.hostname,
-            port=parts.port or 5432,
-            user=parts.username,
-            password=parts.password,
-            database="template1",
-        )
-        await sys_conn.execute(f"DROP DATABASE {parts.path[1:]}")
-        await sys_conn.close()
 
     async def run(self):
         """Perform the upgrade.
@@ -650,8 +671,7 @@ class MwstAsProfilesStrategy(Strategy):
             await self.convert_items_to_askar(
                 sub_conn.uri, self.base_wallet_key, self.limit, wallet_id
             )
-        if self.delete_indy_wallets:
-            await self.delete_wallets_database()
+        await self.determine_wallet_deletion()
 
 
 class MwstAsStoresStrategy(Strategy):
@@ -661,13 +681,17 @@ class MwstAsStoresStrategy(Strategy):
         self,
         uri: str,
         wallet_keys: Dict[str, str],
-        allow_missing_wallet: Optional[bool] = False,
         limit: int = 50,
+        allow_missing_wallet: Optional[bool] = False,
+        delete_indy_wallets: Optional[bool] = False,
+        skip_confirmation: Optional[bool] = False,
     ):
         self.uri = uri
         self.wallet_keys = wallet_keys
-        self.allow_missing_wallet = allow_missing_wallet
         self.limit = limit
+        self.allow_missing_wallet = allow_missing_wallet
+        self.delete_indy_wallets = delete_indy_wallets
+        self.skip_confirmation = skip_confirmation
 
     def create_new_db_connection(self, wallet_name: str):
         parsed = urlparse(self.uri)
@@ -694,6 +718,8 @@ class MwstAsStoresStrategy(Strategy):
                 await self.check_wallet_alignment(conn, wallet_keys)
             except MissingWalletError:
                 print("Running upgrade without migrating all wallets")
+                # Remaining wallets will not be deleted
+                self.delete_indy_wallets = False
         else:
             await self.check_wallet_alignment(conn, wallet_keys)
 
@@ -726,3 +752,4 @@ class MwstAsStoresStrategy(Strategy):
             await self.convert_items_to_askar(new_db_conn.uri, wallet_key, self.limit)
 
         await source.close()
+        await self.determine_wallet_deletion()

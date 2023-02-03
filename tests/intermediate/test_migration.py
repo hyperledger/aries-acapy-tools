@@ -221,6 +221,49 @@ async def test_migration_mwst_as_separate_stores(
     )
 
 
+@pytest.mark.asyncio
+async def test_migration_mwst_as_separate_stores_delete_indy_wallets_not_deleted(
+    postgres_with_volume,
+):
+    """
+    Run the migration script with the db in the docker container.
+    """
+    port = postgres_with_volume("mwst")
+    await migrate_pg_db(
+        db_port=port,
+        db_name="wallets",
+        strategy="mwst-as-stores",
+        wallet_keys={
+            "alice": "alice_insecure1",
+        },
+        allow_missing_wallet=True,
+        delete_indy_wallets=True,
+    )
+    # Wallets are not deleted in this scenario
+
+
+@pytest.mark.asyncio
+async def test_migration_mwst_as_separate_stores_delete_indy_wallets_deleted(
+    postgres_with_volume,
+):
+    """
+    Run the migration script with the db in the docker container.
+    """
+    port = postgres_with_volume("mwst")
+    await migrate_pg_db(
+        db_port=port,
+        db_name="wallets",
+        strategy="mwst-as-stores",
+        wallet_keys={
+            "alice": "alice_insecure1",
+            "bob": "bob_insecure1",
+        },
+        allow_missing_wallet=False,
+        delete_indy_wallets=True,
+    )
+    # Wallets are deleted in this scenario
+
+
 @pytest.mark.parametrize(
     "wallet_keys, error",
     [
