@@ -174,77 +174,82 @@ Indy-SDK and Askar store their wallets inside different directories:
 It is left to the user to move their wallet(s) into the desired location.
 
 ## Step-by-step ACA-Py Wallet Migration Guide
-0. Stop any agents using the wallet: Before starting the migration process, make sure to stop any agents or applications that are currently using the wallet to avoid database access conflicts.
-1. Backup your current wallet: It is important to create a backup of your current wallet before starting the migration process, in case anything goes wrong. If using sqlite, copy the indy wallet from `/home/<user>/.indy_client/wallet/<wallet name>` to a temporary location you can run the migration script from. After running migration script you will be coping the resulting db into Askar location. Migrating a postgresql data base will not require any file relocation. Both sqlite and postgresql migration will require updating ACA-Py startup config, which this guide will explain.  
-2. Prepare configuration: The migration script supports migration from Indy SQLite to Aries SQLite or from Indy PostgreSQL to Aries PostgreSQL. Determine which database and [storage plugin](https://github.com/hyperledger/indy-sdk/tree/main/experimental/plugins/postgres_storage#wallet-management-modes) you are using and gather the necessary information for your scenario. Wallet migration strategies include `dbpw`, `mwst-as-profiles`, `mwst-as-stores`.  The postgres `dbpw` is the default wallet_scheme for Indy when using postgres storage plugin. Postgres `MWST` wallet scheme serves both `MultiWalletSingleTable` and `MultiWalletSingleTableSharedPool` indy storage plugin management styles. The default configuration for ACA-Py multi-tenant agent is managed or `mwst` and migrates with `mwst-as-profiles` strategy. If you have a shared database for multiple ACA-Py instances but DID NOT use Multi-tenancy you should use `mwst-as-stores` strategy. Here are examples of different strategies with minimum configuration. For `mwst` schemes you will need to provide a json file that includes the wallet_name, keyed to wallet_key. Example, {<wallet_name>:<wallet_key>,...}.
-    - `dbpw`(Indy SQLite -> Aries SQLite):
-        ```
-        askar-upgrade \
-        --strategy dbpw \
-        --uri sqlite://<path to sqlite db> \
-        --wallet-name <wallet name> \
-        --wallet-key <wallet key>
-        ```
-    - `dbpw`(Indy PostgreSQL single wallet per data store -> Aries PostgreSQL single wallet per data store):
-        ```
-        askar-upgrade \
-        --strategy dbpw \
-        --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
-        --wallet-name <wallet name> \
-        --wallet-key <wallet key>
-        ```
-    - `mwst-as-profiles`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL single store, one wallet per profile):
-        ```
-        askar-upgrade \
-        --strategy mwst-as-profiles \
-        --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
-        --wallet-name <wallet name> \
-        --wallet-key <wallet key> \
-        --base-wallet-name: <base wallet name> \
-        --base-wallet-key: <base wallet key> \
-        --wallet-keys: <path to json file with wallet keys>
-        ```
-    - `mwst-as-stores`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL multiple stores, one wallet per data store):
-        ```
-        askar-upgrade \
-        --strategy mwst-as-stores \
-        --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
-        --wallet-name <wallet name> \
-        --wallet-key <wallet key> \
-        --base-wallet-name: <base wallet name> \
-        --base-wallet-key: <base wallet key> \
-        --wallet-keys: <path to json file with wallet keys>
-        ```
+### 0. Stop any agents using the wallet: 
+Before starting the migration process, make sure to stop any agents or applications that are currently using the wallet to avoid database access conflicts.
+### 1. Backup your current wallet:
+It is important to create a backup of your current wallet before starting the migration process, in case anything goes wrong. If using sqlite, copy the indy wallet from `/home/<user>/.indy_client/wallet/<wallet name>` to a temporary location you can run the migration script from. After running migration script you will be coping the resulting db into Askar location. Migrating a postgresql data base will not require any file relocation. Both sqlite and postgresql migration will require updating ACA-Py startup config, which this guide will explain.  
+### 2. Prepare configuration:
+The migration script supports migration from Indy SQLite to Aries SQLite or from Indy PostgreSQL to Aries PostgreSQL. Determine which database and [storage plugin](https://github.com/hyperledger/indy-sdk/tree/main/experimental/plugins/postgres_storage#wallet-management-modes) you are using and gather the necessary information for your scenario. Wallet migration strategies include `dbpw`, `mwst-as-profiles`, `mwst-as-stores`.  The postgres `dbpw` is the default wallet_scheme for Indy when using postgres storage plugin. Postgres `MWST` wallet scheme serves both `MultiWalletSingleTable` and `MultiWalletSingleTableSharedPool` indy storage plugin management styles. The default configuration for ACA-Py multi-tenant agent is managed or `mwst` and migrates with `mwst-as-profiles` strategy. If you have a shared database for multiple ACA-Py instances but DID NOT use Multi-tenancy you should use `mwst-as-stores` strategy. Here are examples of different strategies with minimum configuration. For `mwst` schemes you will need to provide a json file that includes the wallet_name, keyed to wallet_key. Example, {<wallet_name>:<wallet_key>,...}.
+- `dbpw`(Indy SQLite -> Aries SQLite):
+    ```
+    askar-upgrade \
+    --strategy dbpw \
+    --uri sqlite://<path to sqlite db> \
+    --wallet-name <wallet name> \
+    --wallet-key <wallet key>
+    ```
+- `dbpw`(Indy PostgreSQL single wallet per data store -> Aries PostgreSQL single wallet per data store):
+    ```
+    askar-upgrade \
+    --strategy dbpw \
+    --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
+    --wallet-name <wallet name> \
+    --wallet-key <wallet key>
+    ```
+- `mwst-as-profiles`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL single store, one wallet per profile):
+    ```
+    askar-upgrade \
+    --strategy mwst-as-profiles \
+    --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
+    --wallet-name <wallet name> \
+    --wallet-key <wallet key> \
+    --base-wallet-name: <base wallet name> \
+    --base-wallet-key: <base wallet key> \
+    --wallet-keys: <path to json file with wallet keys>
+    ```
+- `mwst-as-stores`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL multiple stores, one wallet per data store):
+    ```
+    askar-upgrade \
+    --strategy mwst-as-stores \
+    --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
+    --wallet-name <wallet name> \
+    --wallet-key <wallet key> \
+    --base-wallet-name: <base wallet name> \
+    --base-wallet-key: <base wallet key> \
+    --wallet-keys: <path to json file with wallet keys>
+    ```
 
-3. Execute the migration with configuration: Make sure you have followed the instructions carefully and double-check your inputs before starting the migration process, as it is a one-way process. DATA LOSS CAN OCCUR IF YOU ARE NOT CAREFUL. THIS PROCESS IS DELIBERATELY DESTRUCTIVE. BACKUP YOUR DATABASE BEFORE PROCEEDING.
+### 3. Execute the migration with configuration:
+Make sure you have followed the instructions carefully and double-check your inputs before starting the migration process, as it is a one-way process. DATA LOSS CAN OCCUR IF YOU ARE NOT CAREFUL. THIS PROCESS IS DELIBERATELY DESTRUCTIVE. BACKUP YOUR DATABASE BEFORE PROCEEDING.
 Example.
 ```
 askar-upgrade --strategy dbpw --uri sqlite://<path to sqlite db> --wallet-name <wallet name> --wallet-key <wallet key>
 ```
-4. Update ACA-Py Configuration:  ACA-Py startup configuration will need to be updated to reflect an Aries wallet type.  
-    - `dbpw`(Indy SQLite -> Aries SQLite):
-    Copy the migrated db into `/home/<user>/.aries_cloudagent/wallet/<wallet name>`.
-        ```
-        --wallet-type askar
-        ```
-    - `dbpw`(Indy PostgreSQL single wallet per data store -> Aries PostgreSQL single wallet per data store):
-        ```
-        --wallet-type askar
-        
-        ```
-    - `mwst-as-profiles`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL single store, one wallet per profile):
-        ```
-        --wallet-type askar
-        --wallet-storage-config '{{ ..., "wallet_scheme":"MultiWalletSingleTable"}}'
-        --multitenant
-        --multitenant-admin
-        --jwt-secret insecure
-        ```
-    - `mwst-as-stores`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL multiple stores, one wallet per data store):
-        ```
-        --wallet-type askar
-        --wallet-storage-config '{{ ..., "wallet_scheme":"MultiWalletSingleTable"}}'
-        ```
+### 4. Update ACA-Py Configuration:
+ACA-Py startup configuration will need to be updated to reflect an Aries wallet type.  
+- `dbpw`(Indy SQLite -> Aries SQLite):
+Copy the migrated db into `/home/<user>/.aries_cloudagent/wallet/<wallet name>`.
+    ```
+    --wallet-type askar
+    ```
+- `dbpw`(Indy PostgreSQL single wallet per data store -> Aries PostgreSQL single wallet per data store):
+    ```
+    --wallet-type askar
+    
+    ```
+- `mwst-as-profiles`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL single store, one wallet per profile):
+    ```
+    --wallet-type askar
+    --wallet-storage-config '{{ ..., "wallet_scheme":"MultiWalletSingleTable"}}'
+    --multitenant
+    --multitenant-admin
+    --jwt-secret insecure
+    ```
+- `mwst-as-stores`(Indy PostgreSQL multiple wallets in a single table -> Aries PostgreSQL multiple stores, one wallet per data store):
+    ```
+    --wallet-type askar
+    --wallet-storage-config '{{ ..., "wallet_scheme":"MultiWalletSingleTable"}}'
+    ```
 
 ### Multiple wallet Edge Cases
 There is a confirmation before database gets deleted. You can opt out of that confirmation by including skip conformation flag.
