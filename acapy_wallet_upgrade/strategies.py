@@ -488,7 +488,7 @@ class DbpwStrategy(Strategy):
         conn: Union[SqliteConnection, PgConnection],
         wallet_name: str,
         wallet_key: str,
-        batch_size: int,
+        batch_size: Optional[int],
     ):
         self.conn = conn
         self.wallet_name = wallet_name
@@ -521,7 +521,7 @@ class MwstAsProfilesStrategy(Strategy):
         uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
-        batch_size: int,
+        batch_size: Optional[int],
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
     ):
@@ -677,7 +677,7 @@ class MwstAsStoresStrategy(Strategy):
         self,
         uri: str,
         wallet_keys: Dict[str, str],
-        batch_size: int,
+        batch_size: Optional[int],
         allow_missing_wallet: Optional[bool] = False,
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
