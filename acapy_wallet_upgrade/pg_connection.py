@@ -233,7 +233,7 @@ class PgWallet(Wallet):
         else:
             raise Exception("Row not found")
 
-    async def fetch_pending_items(self, limit: int):
+    async def fetch_pending_items(self, batch_size: int):
         """Fetch un-updated items by wallet_id, if it exists."""
         while True:
             command = """
@@ -249,12 +249,12 @@ class PgWallet(Wallet):
                 )
                 rows = await self._old_conn.fetch(
                     command,
-                    limit,
+                    batch_size,
                     self._wallet_id,
                 )
             else:
                 command += f"FROM {self._items_table} i LIMIT $1;"
-                rows = await self._old_conn.fetch(command, limit)
+                rows = await self._old_conn.fetch(command, batch_size)
             if not rows:
                 break
             yield rows

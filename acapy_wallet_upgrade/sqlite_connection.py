@@ -161,7 +161,7 @@ class SqliteWallet(Wallet):
 
         return found
 
-    async def fetch_pending_items(self, limit: int):
+    async def fetch_pending_items(self, batch_size: int):
         """Fetch un-updated items."""
         while True:
             stmt = await self._conn.execute(
@@ -173,7 +173,7 @@ class SqliteWallet(Wallet):
                     FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
                 FROM items_old i LIMIT ?1
                 """,
-                (limit,),
+                (batch_size,),
             )
             rows = await stmt.fetchall()
             if not rows:
@@ -184,7 +184,7 @@ class SqliteWallet(Wallet):
         """Update items in the database."""
         del_ids = []
         for item in items:
-            del_ids = item["id"]
+            del_ids.append(item["id"])
             ins = await self._conn.execute(
                 """
                 INSERT INTO items (profile_id, kind, category, name, value)
@@ -201,5 +201,9 @@ class SqliteWallet(Wallet):
                     """,
                     ((item_id, *tag) for tag in item["tags"]),
                 )
-        await self._conn.execute("DELETE FROM items_old WHERE id IN (?1)", (del_ids,))
+        await self._conn.execute(
+            "DELETE FROM items_old WHERE id IN ({})".format(
+                ",".join([str(del_id) for del_id in del_ids])
+            )
+        )
         await self._conn.commit()

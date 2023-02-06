@@ -36,6 +36,9 @@ ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_L
 class Strategy(ABC):
     """Base class for upgrade strategies."""
 
+    def __init__(self, batch_size: int):
+        self.batch_size = batch_size
+
     def encrypt_merged(
         self, message: bytes, my_key: bytes, hmac_key: bytes = None
     ) -> bytes:
@@ -136,7 +139,7 @@ class Strategy(ABC):
         indy_key: dict,
         profile_key: dict,
     ):
-        async for rows in wallet.fetch_pending_items(1):
+        async for rows in wallet.fetch_pending_items(self.batch_size):
             upd = []
             for row in rows:
                 result = self.decrypt_item(
@@ -180,9 +183,9 @@ class Strategy(ABC):
         keys["salt"] = salt
         return keys
 
-    async def batched_fetch_all(self, txn: Session, category: str, limit: int = 50):
+    async def batched_fetch_all(self, txn: Session, category: str):
         while True:
-            items = await txn.fetch_all(category, limit=limit)
+            items = await txn.fetch_all(category, limit=self.batch_size)
             if not items:
                 break
             for row in items:
@@ -209,9 +212,7 @@ class Strategy(ABC):
         print("Updating master secret(s)...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(
-                txn, "Indy::MasterSecret", limit=None
-            ):
+            async for row in self.batched_fetch_all(txn, "Indy::MasterSecret"):
                 if upd_count > 0:
                     raise Exception("Encountered multiple master secrets")
                 await txn.remove("Indy::MasterSecret", row.name)
@@ -311,7 +312,8 @@ class Strategy(ABC):
         upd_count = 0
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
-                txn, "Indy::RevocationRegistryDefinition"
+                txn,
+                "Indy::RevocationRegistryDefinition",
             ):
                 await txn.remove("Indy::RevocationRegistryDefinition", row.name)
                 await txn.insert("revocation_reg_def", row.name, value=row.value)
@@ -338,7 +340,10 @@ class Strategy(ABC):
         print("Updating stored revocation registry states...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(txn, "Indy::RevocationRegistry"):
+            async for row in self.batched_fetch_all(
+                txn,
+                "Indy::RevocationRegistry",
+            ):
                 await txn.remove("Indy::RevocationRegistry", row.name)
                 await txn.insert("revocation_reg", row.name, value=row.value)
                 upd_count += 1
@@ -350,7 +355,8 @@ class Strategy(ABC):
         upd_count = 0
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
-                txn, "Indy::RevocationRegistryInfo"
+                txn,
+                "Indy::RevocationRegistryInfo",
             ):
                 await txn.remove("Indy::RevocationRegistryInfo", row.name)
                 await txn.insert("revocation_reg_info", row.name, value=row.value)
@@ -372,7 +378,10 @@ class Strategy(ABC):
         print(f" {upd_count} updated")
 
     async def convert_items_to_askar(
-        self, uri: str, wallet_key: str, profile: str = None
+        self,
+        uri: str,
+        wallet_key: str,
+        profile: str = None,
     ):
         print("Opening wallet with Askar...")
         store = await Store.open(uri, pass_key=wallet_key, profile=profile)
@@ -482,7 +491,9 @@ class DbpwStrategy(Strategy):
         conn: Union[SqliteConnection, PgConnection],
         wallet_name: str,
         wallet_key: str,
+        batch_size: int,
     ):
+        super().__init__(batch_size)
         self.conn = conn
         self.wallet_name = wallet_name
         self.wallet_key = wallet_key
@@ -513,9 +524,11 @@ class MwstAsProfilesStrategy(Strategy):
         uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
+        batch_size: int,
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
     ):
+        super().__init__(batch_size)
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
@@ -578,14 +591,16 @@ class MwstAsProfilesStrategy(Strategy):
             print(f"The following wallets were not migrated: {leftover_wallets}")
             if self.delete_indy_wallets:
                 print(
-                    "Indy wallets will not be deleted because there are wallets that were not migrated"
+                    "Indy wallets will not be deleted because there are wallets "
+                    "that were not migrated"
                 )
                 self.delete_indy_wallets = False
 
     async def run(self):
         """Perform the upgrade.
 
-        - Source Indy Wallet is read from, values deleted as we go to reduce storage overhead
+        - Source Indy Wallet is read from, values deleted as we go to reduce
+          storage overhead
         - Base Wallet Store where the base wallet and it's records are migrated
         - Sub wallet Store where the sub wallets and their records are migrated
 
@@ -667,10 +682,12 @@ class MwstAsStoresStrategy(Strategy):
         self,
         uri: str,
         wallet_keys: Dict[str, str],
+        batch_size: int,
         allow_missing_wallet: Optional[bool] = False,
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
     ):
+        super().__init__(batch_size)
         self.uri = uri
         self.wallet_keys = wallet_keys
         self.allow_missing_wallet = allow_missing_wallet
@@ -693,7 +710,8 @@ class MwstAsStoresStrategy(Strategy):
         for wallet_id in retrieved_wallet_keys:
             if wallet_id not in wallet_keys.keys():
                 raise MissingWalletError(
-                    f"Must provide entry for {wallet_id} in wallet_keys dictionary to migrate wallet"
+                    f"Must provide entry for {wallet_id} in wallet_keys dictionary "
+                    "to migrate wallet"
                 )
 
     async def check_missing_wallet_flag(self, conn, wallet_keys, allow_missing_wallet):
@@ -734,5 +752,6 @@ class MwstAsStoresStrategy(Strategy):
                 await new_db_conn.close()
 
             await self.convert_items_to_askar(new_db_conn.uri, wallet_key)
+
         await source.close()
         await self.determine_wallet_deletion()
