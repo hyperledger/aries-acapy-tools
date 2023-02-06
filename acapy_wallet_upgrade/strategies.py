@@ -36,6 +36,9 @@ ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_L
 class Strategy(ABC):
     """Base class for upgrade strategies."""
 
+    def __init__(self, batch_size: int):
+        self.batch_size = batch_size
+
     def encrypt_merged(
         self, message: bytes, my_key: bytes, hmac_key: bytes = None
     ) -> bytes:
@@ -488,12 +491,12 @@ class DbpwStrategy(Strategy):
         conn: Union[SqliteConnection, PgConnection],
         wallet_name: str,
         wallet_key: str,
-        batch_size: Optional[int],
+        batch_size: int,
     ):
+        super().__init__(batch_size)
         self.conn = conn
         self.wallet_name = wallet_name
         self.wallet_key = wallet_key
-        self.batch_size = batch_size
 
     async def run(self):
         """Perform the upgrade."""
@@ -521,14 +524,14 @@ class MwstAsProfilesStrategy(Strategy):
         uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
-        batch_size: Optional[int],
+        batch_size: int,
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
     ):
+        super().__init__(batch_size)
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
-        self.batch_size = batch_size
         self.delete_indy_wallets = delete_indy_wallets
         self.skip_confirmation = skip_confirmation
 
@@ -588,14 +591,16 @@ class MwstAsProfilesStrategy(Strategy):
             print(f"The following wallets were not migrated: {leftover_wallets}")
             if self.delete_indy_wallets:
                 print(
-                    "Indy wallets will not be deleted because there are wallets that were not migrated"
+                    "Indy wallets will not be deleted because there are wallets "
+                    "that were not migrated"
                 )
                 self.delete_indy_wallets = False
 
     async def run(self):
         """Perform the upgrade.
 
-        - Source Indy Wallet is read from, values deleted as we go to reduce storage overhead
+        - Source Indy Wallet is read from, values deleted as we go to reduce
+          storage overhead
         - Base Wallet Store where the base wallet and it's records are migrated
         - Sub wallet Store where the sub wallets and their records are migrated
 
@@ -677,14 +682,14 @@ class MwstAsStoresStrategy(Strategy):
         self,
         uri: str,
         wallet_keys: Dict[str, str],
-        batch_size: Optional[int],
+        batch_size: int,
         allow_missing_wallet: Optional[bool] = False,
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
     ):
+        super().__init__(batch_size)
         self.uri = uri
         self.wallet_keys = wallet_keys
-        self.batch_size = batch_size
         self.allow_missing_wallet = allow_missing_wallet
         self.delete_indy_wallets = delete_indy_wallets
         self.skip_confirmation = skip_confirmation
@@ -705,7 +710,8 @@ class MwstAsStoresStrategy(Strategy):
         for wallet_id in retrieved_wallet_keys:
             if wallet_id not in wallet_keys.keys():
                 raise MissingWalletError(
-                    f"Must provide entry for {wallet_id} in wallet_keys dictionary to migrate wallet"
+                    f"Must provide entry for {wallet_id} in wallet_keys dictionary "
+                    "to migrate wallet"
                 )
 
     async def check_missing_wallet_flag(self, conn, wallet_keys, allow_missing_wallet):
