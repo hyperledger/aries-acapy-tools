@@ -18,25 +18,28 @@ The docker-compose.yml also contains a service called juggernaut for running pro
 ```
 docker-compose run juggernaut
 ``` 
-After the migration script has finished you can examine the admin api of alice to demonstrate contents of the indy wallet.
+Before the migration script has finished you can examine the [admin api](http://localhost:3001) of alice and [admin api](http://localhost:3002) of bob to demonstrate contents of the indy wallet.
 
+Before migration we need to stop any ACA-Py agents that are using the database
 #### Stop agents
 ```
 docker-compose stop alice bob
 ```
-
-### Migrate
+With the agents stopped we can execute the migration script.
+#### Migrate
 ```
 askar-upgrade --strategy dbpw --uri postgres://postgres:mysecretpassword@localhost:5432/alice --wallet-name alice --wallet-key alice_insecure0
 askar-upgrade --strategy dbpw --uri postgres://postgres:mysecretpassword@localhost:5432/bob --wallet-name bob --wallet-key bob_insecure0
 ```
-
-### Run agents using Askar wallet configuration
+Now that alice and bob wallets have been migrated, we need to update the wallet type in aca-py config. Out of convenience the demo directory contains an updated docker-compose file called `docker-compose-askar.yml`. 
+#### Run agents using Askar wallet configuration
 ```
 docker-compose -f docker-compose-askar.yml up -d alice bob
 ```
-
-### Conclusion
-Summarize the key takeaways from the demo and provide any additional resources or support that may be available.
+Now that migration script has finished you can examine the [admin api](http://localhost:3001/api) of alice and [admin api](http://localhost:3002/api) of bob to demonstrate contents of the askar wallet.
+### End the demo
+```
+docker-compose down
+```
 
 
