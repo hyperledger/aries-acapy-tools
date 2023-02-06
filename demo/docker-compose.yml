@@ -16,8 +16,8 @@ services:
       retries: 5
       start_period: 10s
 
-  alice-dbpw:
-    container_name: alice-dbpw
+  alice:
+    container_name: alice
     image: docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5
     ports:
       - "3001:3001"
@@ -27,7 +27,7 @@ services:
       start -it http 0.0.0.0 3000
         --label Alice
         -ot http
-        -e http://alice-dbpw:3000
+        -e http://alice:3000
         --admin 0.0.0.0 3001 --admin-insecure-mode
         --log-level debug
         --genesis-url https://raw.githubusercontent.com/Indicio-tech/indicio-network/main/genesis_files/pool_transactions_testnet_genesis
@@ -52,8 +52,8 @@ services:
       db:
         condition: service_healthy
 
-  bob-dbpw:
-    container_name: bob-dbpw
+  bob:
+    container_name: bob
     image: docker.io/bcgovimages/aries-cloudagent:py36-1.16-1_0.7.5
     ports:
       - "3002:3001"
@@ -61,7 +61,7 @@ services:
       start -it http 0.0.0.0 3000
         --label Bob
         -ot http
-        -e http://bob-dbpw:3000
+        -e http://bob:3000
         --admin 0.0.0.0 3001 --admin-insecure-mode
         --log-level debug
         --genesis-url https://raw.githubusercontent.com/Indicio-tech/indicio-network/main/genesis_files/pool_transactions_testnet_genesis
@@ -99,16 +99,16 @@ services:
       --storage-path /tmp/tails-files
       --log-level INFO
 
-  juggernaut-dbpw:
+  juggernaut:
     build:
       context: ../tests/intermediate/input
     image: populate-indy-db
     environment:
-      - ALICE=http://alice-dbpw:3001
-      - BOB=http://bob-dbpw:3001
+      - ALICE=http://alice:3001
+      - BOB=http://bob:3001
     command: populate_db.py
     depends_on:
-      alice-dbpw:
+      alice:
         condition: service_healthy
-      bob-dbpw:
+      bob:
         condition: service_healthy
