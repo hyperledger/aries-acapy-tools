@@ -161,7 +161,7 @@ class SqliteWallet(Wallet):
 
         return found
 
-    async def fetch_pending_items(self, limit: int):
+    async def fetch_pending_items(self, batch_size: int):
         """Fetch un-updated items."""
         while True:
             stmt = await self._conn.execute(
@@ -173,7 +173,7 @@ class SqliteWallet(Wallet):
                     FROM tags_plaintext tp WHERE tp.item_id = i.id) AS tags_plain
                 FROM items_old i LIMIT ?1
                 """,
-                (limit,),
+                (batch_size,),
             )
             rows = await stmt.fetchall()
             if not rows:

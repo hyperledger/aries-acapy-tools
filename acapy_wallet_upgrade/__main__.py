@@ -74,12 +74,9 @@ def config():
         ),
     )
     parser.add_argument(
-        "--limit",
+        "--batch-size",
         type=int,
-        help=(
-            "Specify limit to indicate the number of items to process in "
-            "each batch."
-        )
+        help=("Specify number of items to process in each batch."),
     )
     parser.add_argument(
         "--allow-missing-wallet",
@@ -142,7 +139,7 @@ async def main(
     base_wallet_name: Optional[str] = None,
     base_wallet_key: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
-    limit: Optional[int] = 50,
+    batch_size: Optional[int] = 50,
     allow_missing_wallet: Optional[bool] = False,
     delete_indy_wallets: Optional[bool] = False,
     skip_confirmation: Optional[bool] = False,
@@ -162,7 +159,7 @@ async def main(
         if not wallet_key:
             raise ValueError("Wallet key required for dbpw strategy")
 
-        strategy_inst = DbpwStrategy(conn, wallet_name, wallet_key, limit)
+        strategy_inst = DbpwStrategy(conn, wallet_name, wallet_key, batch_size)
 
     elif strategy == "mwst-as-profiles":
         if parsed.scheme != "postgres":
@@ -177,6 +174,7 @@ async def main(
             uri,
             base_wallet_name,
             base_wallet_key,
+            batch_size,
             delete_indy_wallets,
             skip_confirmation,
         )
@@ -189,7 +187,12 @@ async def main(
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
         strategy_inst = MwstAsStoresStrategy(
-            uri, wallet_keys, limit, allow_missing_wallet, delete_indy_wallets, skip_confirmation
+            uri,
+            wallet_keys,
+            batch_size,
+            allow_missing_wallet,
+            delete_indy_wallets,
+            skip_confirmation,
         )
 
     else:

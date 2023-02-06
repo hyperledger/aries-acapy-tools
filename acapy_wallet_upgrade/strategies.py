@@ -135,9 +135,8 @@ class Strategy(ABC):
         wallet: Wallet,
         indy_key: dict,
         profile_key: dict,
-        limit: int,
     ):
-        async for rows in wallet.fetch_pending_items(limit):
+        async for rows in wallet.fetch_pending_items(self.batch_size):
             upd = []
             for row in rows:
                 result = self.decrypt_item(
@@ -181,19 +180,19 @@ class Strategy(ABC):
         keys["salt"] = salt
         return keys
 
-    async def batched_fetch_all(self, txn: Session, category: str, limit: int):
+    async def batched_fetch_all(self, txn: Session, category: str):
         while True:
-            items = await txn.fetch_all(category, limit=limit)
+            items = await txn.fetch_all(category, limit=self.batch_size)
             if not items:
                 break
             for row in items:
                 yield row
 
-    async def update_keys(self, store: Store, limit: int):
+    async def update_keys(self, store: Store):
         print("Updating keys...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(txn, "Indy::Key", limit):
+            async for row in self.batched_fetch_all(txn, "Indy::Key"):
                 await txn.remove("Indy::Key", row.name)
                 meta = await txn.fetch("Indy::KeyMetadata", row.name)
                 if meta:
@@ -206,13 +205,11 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_master_keys(self, store: Store, limit: int):
+    async def update_master_keys(self, store: Store):
         print("Updating master secret(s)...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(
-                txn, "Indy::MasterSecret", limit=None
-            ):
+            async for row in self.batched_fetch_all(txn, "Indy::MasterSecret"):
                 if upd_count > 0:
                     raise Exception("Encountered multiple master secrets")
                 await txn.remove("Indy::MasterSecret", row.name)
@@ -221,11 +218,11 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_dids(self, store: Store, limit: int):
+    async def update_dids(self, store: Store):
         print("Updating DIDs...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(txn, "Indy::Did", limit):
+            async for row in self.batched_fetch_all(txn, "Indy::Did"):
                 await txn.remove("Indy::Did", row.name)
                 info = json.loads(row.value)
                 meta = await txn.fetch("Indy::DidMetadata", row.name)
@@ -248,11 +245,11 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_schemas(self, store: Store, limit: int):
+    async def update_schemas(self, store: Store):
         print("Updating stored schemas...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(txn, "Indy::Schema", limit):
+            async for row in self.batched_fetch_all(txn, "Indy::Schema"):
                 await txn.remove("Indy::Schema", row.name)
                 await txn.insert(
                     "schema",
@@ -263,13 +260,11 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_cred_defs(self, store: Store, limit: int):
+    async def update_cred_defs(self, store: Store):
         print("Updating stored credential definitions...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(
-                txn, "Indy::CredentialDefinition", limit
-            ):
+            async for row in self.batched_fetch_all(txn, "Indy::CredentialDefinition"):
                 await txn.remove("Indy::CredentialDefinition", row.name)
                 sid = await txn.fetch("Indy::SchemaId", row.name)
                 if not sid:
@@ -309,12 +304,13 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_rev_reg_defs(self, store: Store, limit: int):
+    async def update_rev_reg_defs(self, store: Store):
         print("Updating stored revocation registry definitions...", end="")
         upd_count = 0
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
-                txn, "Indy::RevocationRegistryDefinition", limit
+                txn,
+                "Indy::RevocationRegistryDefinition",
             ):
                 await txn.remove("Indy::RevocationRegistryDefinition", row.name)
                 await txn.insert("revocation_reg_def", row.name, value=row.value)
@@ -322,12 +318,12 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_rev_reg_keys(self, store: Store, limit: int):
+    async def update_rev_reg_keys(self, store: Store):
         print("Updating stored revocation registry keys...", end="")
         upd_count = 0
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
-                txn, "Indy::RevocationRegistryDefinitionPrivate", limit
+                txn, "Indy::RevocationRegistryDefinitionPrivate"
             ):
                 await txn.remove("Indy::RevocationRegistryDefinitionPrivate", row.name)
                 await txn.insert(
@@ -337,12 +333,13 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_rev_reg_states(self, store: Store, limit: int):
+    async def update_rev_reg_states(self, store: Store):
         print("Updating stored revocation registry states...", end="")
         upd_count = 0
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
-                txn, "Indy::RevocationRegistry", limit
+                txn,
+                "Indy::RevocationRegistry",
             ):
                 await txn.remove("Indy::RevocationRegistry", row.name)
                 await txn.insert("revocation_reg", row.name, value=row.value)
@@ -350,12 +347,13 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_rev_reg_info(self, store: Store, limit: int):
+    async def update_rev_reg_info(self, store: Store):
         print("Updating stored revocation registry info...", end="")
         upd_count = 0
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
-                txn, "Indy::RevocationRegistryInfo", limit
+                txn,
+                "Indy::RevocationRegistryInfo",
             ):
                 await txn.remove("Indy::RevocationRegistryInfo", row.name)
                 await txn.insert("revocation_reg_info", row.name, value=row.value)
@@ -363,11 +361,11 @@ class Strategy(ABC):
             await txn.commit()
         print(f" {upd_count} updated")
 
-    async def update_creds(self, store: Store, limit: int):
+    async def update_creds(self, store: Store):
         print("Updating stored credentials...", end="")
         upd_count = 0
         async with store.transaction() as txn:
-            async for row in self.batched_fetch_all(txn, "Indy::Credential", limit):
+            async for row in self.batched_fetch_all(txn, "Indy::Credential"):
                 await txn.remove("Indy::Credential", row.name)
                 cred_data = row.value_json
                 tags = self._credential_tags(cred_data)
@@ -380,22 +378,21 @@ class Strategy(ABC):
         self,
         uri: str,
         wallet_key: str,
-        limit: int,
         profile: str = None,
     ):
         print("Opening wallet with Askar...")
         store = await Store.open(uri, pass_key=wallet_key, profile=profile)
 
-        await self.update_keys(store, limit)
-        await self.update_master_keys(store, limit)
-        await self.update_dids(store, limit)
-        await self.update_schemas(store, limit)
-        await self.update_cred_defs(store, limit)
-        await self.update_rev_reg_defs(store, limit)
-        await self.update_rev_reg_keys(store, limit)
-        await self.update_rev_reg_states(store, limit)
-        await self.update_rev_reg_info(store, limit)
-        await self.update_creds(store, limit)
+        await self.update_keys(store)
+        await self.update_master_keys(store)
+        await self.update_dids(store)
+        await self.update_schemas(store)
+        await self.update_cred_defs(store)
+        await self.update_rev_reg_defs(store)
+        await self.update_rev_reg_keys(store)
+        await self.update_rev_reg_states(store)
+        await self.update_rev_reg_info(store)
+        await self.update_creds(store)
 
         print("Closing wallet")
         await store.close()
@@ -491,12 +488,12 @@ class DbpwStrategy(Strategy):
         conn: Union[SqliteConnection, PgConnection],
         wallet_name: str,
         wallet_key: str,
-        limit: int,
+        batch_size: int,
     ):
         self.conn = conn
         self.wallet_name = wallet_name
         self.wallet_key = wallet_key
-        self.limit = limit
+        self.batch_size = batch_size
 
     async def run(self):
         """Perform the upgrade."""
@@ -508,12 +505,12 @@ class DbpwStrategy(Strategy):
             indy_key = await self.fetch_indy_key(wallet, self.wallet_key)
             await self.create_config(self.conn, self.wallet_name, indy_key)
             profile_key = await self.init_profile(wallet, self.wallet_name, indy_key)
-            await self.update_items(wallet, indy_key, profile_key, self.limit)
+            await self.update_items(wallet, indy_key, profile_key)
             await self.conn.finish_upgrade()
         finally:
             await self.conn.close()
 
-        await self.convert_items_to_askar(self.conn.uri, self.wallet_key, self.limit)
+        await self.convert_items_to_askar(self.conn.uri, self.wallet_key)
 
 
 class MwstAsProfilesStrategy(Strategy):
@@ -524,14 +521,14 @@ class MwstAsProfilesStrategy(Strategy):
         uri: str,
         base_wallet_name: str,
         base_wallet_key: str,
-        limit: int = 50,
+        batch_size: int,
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
     ):
         self.uri = uri
         self.base_wallet_name = base_wallet_name
         self.base_wallet_key = base_wallet_key
-        self.limit = limit
+        self.batch_size = batch_size
         self.delete_indy_wallets = delete_indy_wallets
         self.skip_confirmation = skip_confirmation
 
@@ -564,7 +561,7 @@ class MwstAsProfilesStrategy(Strategy):
         profile_key = await self.init_profile(
             wallet, wallet_id, base_indy_key, indy_key
         )
-        await self.update_items(wallet, indy_key, profile_key, self.limit)
+        await self.update_items(wallet, indy_key, profile_key)
 
     async def get_wallet_info(self, uri: str):
         store = await Store.open(
@@ -644,7 +641,6 @@ class MwstAsProfilesStrategy(Strategy):
             await self.convert_items_to_askar(
                 base_conn.uri,
                 self.base_wallet_key,
-                self.limit,
             )
             # Track migrated wallets
             migrated_wallets = [self.base_wallet_name]
@@ -669,7 +665,7 @@ class MwstAsProfilesStrategy(Strategy):
 
         for wallet_id in wallet_ids:
             await self.convert_items_to_askar(
-                sub_conn.uri, self.base_wallet_key, self.limit, wallet_id
+                sub_conn.uri, self.base_wallet_key, wallet_id
             )
         await self.determine_wallet_deletion()
 
@@ -681,14 +677,14 @@ class MwstAsStoresStrategy(Strategy):
         self,
         uri: str,
         wallet_keys: Dict[str, str],
-        limit: int = 50,
+        batch_size: int,
         allow_missing_wallet: Optional[bool] = False,
         delete_indy_wallets: Optional[bool] = False,
         skip_confirmation: Optional[bool] = False,
     ):
         self.uri = uri
         self.wallet_keys = wallet_keys
-        self.limit = limit
+        self.batch_size = batch_size
         self.allow_missing_wallet = allow_missing_wallet
         self.delete_indy_wallets = delete_indy_wallets
         self.skip_confirmation = skip_confirmation
@@ -744,12 +740,12 @@ class MwstAsStoresStrategy(Strategy):
                 indy_key = await self.fetch_indy_key(wallet, wallet_key)
                 await self.create_config(new_db_conn, wallet_name, indy_key)
                 profile_key = await self.init_profile(wallet, wallet_name, indy_key)
-                await self.update_items(wallet, indy_key, profile_key, self.limit)
+                await self.update_items(wallet, indy_key, profile_key)
                 await new_db_conn.finish_upgrade()
             finally:
                 await new_db_conn.close()
 
-            await self.convert_items_to_askar(new_db_conn.uri, wallet_key, self.limit)
+            await self.convert_items_to_askar(new_db_conn.uri, wallet_key)
 
         await source.close()
         await self.determine_wallet_deletion()
