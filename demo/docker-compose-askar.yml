@@ -99,16 +99,3 @@ services:
       --storage-path /tmp/tails-files
       --log-level INFO
 
-  juggernaut:
-    build:
-      context: ../tests/intermediate/input
-    image: populate-indy-db
-    environment:
-      - ALICE=http://alice:3001
-      - BOB=http://bob:3001
-    command: populate_db.py
-    depends_on:
-      alice:
-        condition: service_healthy
-      bob:
-        condition: service_healthy

@@ -21,10 +21,11 @@ docker-compose run juggernaut
 ``` 
 You can examine the Admin APIs of [Alice](http://localhost:3001) and [Bob](http://localhost:3002) to demonstrate contents of the Indy wallet before migration.
 
-#### Stop agents
-The ACA-Py agents using the database must be stopped before the migration is performed.
+#### Stop and remove agents
+The ACA-Py agents using the database must be stopped and removed before the migration is performed.
 ```
 docker-compose stop alice bob
+docker-compose rm alice bob
 ```
 #### Migrate the wallets
 ```
