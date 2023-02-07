@@ -1,43 +1,44 @@
 # Demo Instruction Guide
 ## Introduction
-This demo directory contains docker-compose configuration and instructions to create a ACA-Py indy wallet, migrate that indy wallet to aries wallet, and restart ACA-Py using the migrated wallet.
+This demo directory contains docker-compose configuration and instructions to create an ACA-Py Indy wallet, migrate that Indy wallet to an Askar wallet, and restart ACA-Py using the migrated Askar wallet.
 
 ## Preparation
-This demo assumes you are familiar with ACA-Py and have docker and poetry installed
+This demo assumes that you are familiar with ACA-Py and have docker and poetry installed.
 
 ## Step-by-Step Instructions
 ### Populate DB:
-The docker-compose.yml contains two services that will start a Issuer agent alice and holder agent bob. alice and bob are configured to use an indy postgresql wallet. We will run a script that will propagate alice and bobs wallets with connections and credentials. Providing a indy wallet to demonstrate migration on.
-#### Start alice and bob
+The `docker-compose.yml` contains two services that will start an issuer agent (Alice) and a holder agent (Bob). Alice and Bob are configured to use an Indy PostgreSQL wallet. We will run a script that will propagate Alice and Bob's wallets with their connections and credentials.
+
+#### Start Alice and Bob
 ```
 cd demo
 docker-compose up -d alice bob
 ```
-The docker-compose.yml also contains a service called juggernaut for running propagation scripts.
 #### Run propagation service
+The `docker-compose.yml` also contains a service called juggernaut for running propagation scripts.
 ```
 docker-compose run juggernaut
 ``` 
-Before the migration script has finished you can examine the [admin api](http://localhost:3001) of alice and [admin api](http://localhost:3002) of bob to demonstrate contents of the indy wallet.
+You can examine the Admin APIs of [Alice](http://localhost:3001) and [Bob](http://localhost:3002) to demonstrate contents of the Indy wallet before migration.
 
-Before migration we need to stop any ACA-Py agents that are using the database
 #### Stop agents
+The ACA-Py agents using the database must be stopped before the migration is performed.
 ```
 docker-compose stop alice bob
 ```
-With the agents stopped we can execute the migration script.
-#### Migrate
+#### Migrate the wallets
 ```
 askar-upgrade --strategy dbpw --uri postgres://postgres:mysecretpassword@localhost:5432/alice --wallet-name alice --wallet-key alice_insecure0
+
 askar-upgrade --strategy dbpw --uri postgres://postgres:mysecretpassword@localhost:5432/bob --wallet-name bob --wallet-key bob_insecure0
 ```
-Now that alice and bob wallets have been migrated, we need to update the wallet type in aca-py config. Out of convenience the demo directory contains an updated docker-compose file called `docker-compose-askar.yml`. 
 #### Run agents using Askar wallet configuration
+Now that Alice and Bob's wallets have been migrated, we need to update the `wallet-type` in the ACA-Py config. Out of convenience, the demo directory contains an updated docker-compose file called `docker-compose-askar.yml`.
 ```
 docker-compose -f docker-compose-askar.yml up -d alice bob
 ```
-Now that migration script has finished you can examine the [admin api](http://localhost:3001/api) of alice and [admin api](http://localhost:3002/api) of bob to demonstrate contents of the askar wallet.
-### End the demo
+Post migration, you can examine the Admin APIs of [Alice](http://localhost:3001) and [Bob](http://localhost:3002) to demonstrate contents of the Askar wallet.
+### Clean up
 ```
 docker-compose down
 ```
