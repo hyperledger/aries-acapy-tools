@@ -190,17 +190,8 @@ This strategy implements migration for both SQLite and PostgreSQL database that 
     * Example: `"alice"`
 * `wallet_key` - key corresponding to the wallet (str)
     * Example: `"insecure"`
+* [`batch_size`](#batch-size) - number of items to process in each batch (int)
 
-#### Run
-SQLite:
-```
-askar-upgrade --strategy dbpw --uri sqlite://<path to sqlite db> --wallet-name <wallet name> --wallet-key <wallet key>
-```
-
-PostgreSQL:
-```
-askar-upgrade --strategy dbpw --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> --wallet-name <wallet name> --wallet-key <wallet key>
-```
 
 ### MWST as Stores
 This strategy implements migration for a PostgreSQL database that uses the `MultiWalletSingleTable` management mode for a standard agent.
@@ -218,14 +209,13 @@ This strategy implements migration for a PostgreSQL database that uses the `Mult
                 "bob": "bob_insecure1",
             }
 ```
-
+* [`batch_size`](#batch-size) - number of items to process in each batch (int)
 * `allow_missing_wallet` - flag to allow wallets in database to not be migrated (bool)
     * There is a check to ensure that the wallet names passed into the migration script align with the wallet names retrieved from the database to be migrated. If a wallet name is passed in that does not correspond to an existing wallet in the database, an `UpgradeError` is raised. If a wallet name that corresponds to an existing wallet in the database is not passed into the script to be migrated, a `MissingWalletError` is raised. If the user wishes to migrate some, but not all, of the wallets in a `MultiWalletSingleTable` database, they can bypass the `MissingWalletError` by setting the `--allow-missing-wallet` argument as `True`.
+* `delete_indy_wallets` - option to delete Indy wallets post-migration
+* `skip_confirmation` - option to skip confirmation before deleting Indy wallets post-migration
 
-#### Run
-```
-askar-upgrade --strategy mwst-as-stores --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> --wallet-keys <wallet keys>
-```
+
 
 ### MWST as Profiles
 
@@ -239,36 +229,13 @@ This strategy implements migration for a PostgreSQL database that uses the `Mult
     * Example: `f"postgres://{user_name}:{db_user_password}@{db_host}:{db_port}/{db_name}"`
 * `base_wallet_name` - name of the base wallet (str)
     * Example: `"agency"`
-* `wallet_keys` - mapping from each wallet and subwallet name to its corresponding key (dict)
-    * Example:
-```
-            {
-                "agency": "agency_insecure0",
-                "alice": "alice_insecure1",
-                "bob": "bob_insecure1",
-            }
-```
+* `base_wallet_key` - key corresponding to the base wallet (str)
+* [`batch_size`](#batch-size) - number of items to process in each batch (int)
+* `delete_indy_wallets` - option to delete Indy wallets post-migration
+* `skip_confirmation` - option to skip confirmation before deleting Indy wallets post-migration
 
-
-#### Run
-```
-askar-upgrade --strategy mwst-as-profiles --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> --base-wallet-name <base wallet name> --wallet-keys <wallet keys>
-```
-
-#### Askar Multitenancy
-After migration, the startup command must include the following argument:
-```
---multitenancy-config wallet_type=askar-profile
-```
-
-
-## Wallet location
-
-Indy-SDK and Askar store their wallets inside different directories:
-- Indy-SDK: `/home/<user>/.indy_client/wallet/<wallet name>`
-- Askar: `/home/<user>/.aries_cloudagent/wallet/<wallet name>`
-
-It is left to the user to move their wallet(s) into the desired location.
+### Batch size
+This parameter refers to the number of items that will be processed in each batch. For our lightly used database, in which the average record was approximately 3 kB and the largest record was approximately 60 kB, we set the default to 50 and process from 70 to 150 kB per batch. However, record sizes will be highly variable between databases. We recommend analyzing the size of the items in your particular database and tuning this value accordingly.
 
 ## Developer automated testing
 
