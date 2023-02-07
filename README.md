@@ -22,7 +22,7 @@ poetry shell
 Before starting the migration process, make sure to stop any agents or applications that are currently using the wallet to avoid database access conflicts.
 
 ### 1. Backup your current wallet:
-It is important to create a backup of your current wallet before starting the migration process, in case anything goes wrong. If using sqlite, copy the indy wallet from `/home/<user>/.indy_client/wallet/<wallet name>` to a temporary location you can run the migration script from. After running migration script you will be coping the resulting db into Askar location. Migrating a postgresql data base will not require any file relocation. Both sqlite and postgresql migration will require updating ACA-Py startup config, which this guide will explain.
+It is important to create a backup of your current wallet before starting the migration process, in case anything goes wrong. If using sqlite, copy the indy wallet from `/home/<user>/.indy_client/wallet/<wallet name>` to a temporary location you can run the migration script from. After running migration script you will be copying the resulting db into Askar location. Migrating a postgresql data base will not require any file relocation. Both sqlite and postgresql migration will require updating ACA-Py startup config, which this guide will explain.
 
 ### 2. Prepare configuration:
 
@@ -69,23 +69,27 @@ If you are using your `MultiWalletSingleTable` database for Multi-tenancy, it is
     --wallet-keys: <path to json file with wallet keys>
     ```
 
-#### Multiple wallet Edge Cases
-There is a confirmation before database gets deleted. You can opt out of that confirmation by including skip conformation flag.
-
+#### Multiple Wallet Edge Cases
+To delete wallets that you did not migrate, include delete indy wallets flag.
 ```
---skip-confirmation
+--delete-indy-wallets
 ```
+* Note: Items are deleted during the migration process, but the database itself is not deleted until after migration if this flag is specified.
 
-If you have wallets you do not want to migrate you can exclude them from the wallet keys file, and include allow missing wallet flag.
+
+If you are using the `mwst-as-stores` strategy and have wallets you do not want to migrate, you can do so by excluding them from the wallet keys file and including the allow missing wallet flag.
 
 ```
 --allow-missing-wallet
 ```
 
-To delete wallets that did not migrate, include delete indy wallets flag.
+
+* Note: If you are using the `mwst-as-stores` strategy, have included both the `--allow-missing-wallet` and `--delete-indy-wallets` flags, and there are wallets that you are not migrating, the `--delete-indy-wallets` flag will be overwritten so that no databases will be deleted.
+
+There is a confirmation before database gets deleted. You can opt out of that confirmation by including skip conformation flag.
 
 ```
---delete-indy-wallets
+--skip-confirmation
 ```
 
 ### 3. Execute the migration with configuration:
@@ -163,6 +167,8 @@ For a multi-tenanted agent that uses the `MultiWalletSingleTable` management mod
 Multi-tenancy in ACA-Py when using Askar has different characteristics. Askar does not have a wallet scheme that exactly matches the `MultiWalletSingleTable` mode with multi-tenanted agents in Indy-SDK. The simple multi-tenancy case for Askar more closely resembles the `DatabasePerWallet` setup of the Indy SDK.
 
 Askar supports the concept of profiles where each profile represents a different user. This mode of operation strictly follows a "managed" wallet style in which the owner of the ACA-Py instance can decrypt and use every Askar Profile contained in its Askar Store. The strategy to migrate such a database will translate the `MultiWalletSingleTable` setup into Askar Profiles, where each wallet corresponds to a row in the profiles table. Since this strategy is intended only for the wallets that were subwallets in a multi-tenanted agent, it does not preserve the unique keys for each wallet in the Indy-SDK setup, as shown in the [diagram](#mwst-as-profiles-key-diagram). Instead, the store key for all Askar profiles is derived from the wallet key of the base wallet in Indy-SDK. The database of a multi-tenanted agent that uses the `MultiWalletSingleTable` mode is migrated using the `MwstAsProfiles` strategy described [below](#mwst-as-profiles).
+
+After migration using the `mwst-as-profiles` strategy, the base wallet will be in one database and the subwallets will be in another database. Both databases have the same store key. This reflects the setup that would have been created if the wallets had originated in an Askar database using the multi-tenancy with the Askar profile manager.
 
 ##### MWST as profiles key diagram
 ![MWST as profiles](mwst-as-profiles.png)
