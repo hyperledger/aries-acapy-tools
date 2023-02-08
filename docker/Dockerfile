@@ -1,5 +1,5 @@
 
-FROM python:3.11.1 AS base
+FROM --platform=linux/amd64 python:3.10-slim AS base
 
 WORKDIR /usr/src/app
 # Install and configure poetry
@@ -19,6 +19,4 @@ RUN poetry config virtualenvs.in-project true
 COPY pyproject.toml poetry.lock README.md ./
 COPY acapy_wallet_upgrade/ acapy_wallet_upgrade/
 COPY tests/ tests/
-# RUN poetry add aries-askar
-RUN poetry build
-# RUN poetry install
+RUN poetry install
