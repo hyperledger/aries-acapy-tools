@@ -12,12 +12,18 @@ RUN apt-get update && apt-get install --yes curl && apt-get clean
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
 ENV PATH="/opt/poetry/bin:$PATH"
-# RUN ls /opt/poetry/bin
 RUN poetry config virtualenvs.in-project true
 
 # Setup project
 COPY pyproject.toml poetry.lock README.md ./
 COPY acapy_wallet_upgrade/ acapy_wallet_upgrade/
 COPY tests/ tests/
-RUN poetry install
-ENTRYPOINT . /usr/src/app/.venv/bin/activate && /bin/bash
+RUN poetry build
+
+
+FROM --platform=linux/amd64 python:3.10-slim AS askar-upgrade
+COPY --from=base /usr/src/app/dist/acapy_wallet_upgrade-0.1.0-py3-none-any.whl /tmp/acapy_wallet_upgrade-0.1.0-py3-none-any.whl
+
+RUN pip install /tmp/acapy_wallet_upgrade-0.1.0-py3-none-any.whl && \
+        rm /tmp/acapy_wallet_upgrade-*
+ENTRYPOINT /bin/bash
