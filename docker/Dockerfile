@@ -20,3 +20,5 @@ COPY pyproject.toml poetry.lock README.md ./
 COPY acapy_wallet_upgrade/ acapy_wallet_upgrade/
 COPY tests/ tests/
 RUN poetry install
+ENTRYPOINT . /usr/src/app/.venv/bin/activate && /bin/bash
+#CMD ["/bin/bash"]
