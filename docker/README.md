@@ -1,11 +1,12 @@
+# Running Migration Script From Docker Container
 From root of project
 ```
 docker build --tag wallet_upgrade --file docker/Dockerfile .
 ```
-then interactive command line
+Then start container with interactive command line
 ```
 docker run -it wallet_upgrade:latest
 ```
 
-For sqlite share a volume with container.
+For sqlite database, share a volume with the container.
 For postgresql database bridge network to container.
