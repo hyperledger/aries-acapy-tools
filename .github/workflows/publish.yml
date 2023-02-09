@@ -52,7 +52,7 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            ghcr.io/${{ steps.info.outputs.repo-owner }}/acapy-wallet-upgrade
+            ghcr.io/${{ steps.info.outputs.repo-owner }}/aries-acapy-wallet-upgrade
           tags: |
             type=raw,value=py${{ matrix.python-version }}-${{ inputs.tag || github.event.release.tag_name }}
 
