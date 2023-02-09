@@ -22,7 +22,7 @@ RUN poetry build
 
 
 FROM --platform=linux/amd64 python:3.10-slim AS askar-upgrade
-COPY --from=base /usr/src/app/dist/acapy_wallet_upgrade-0.1.0-py3-none-any.whl /tmp/acapy_wallet_upgrade-0.1.0-py3-none-any.whl
+COPY --from=base /usr/src/app/dist/acapy_wallet_upgrade-*-py3-none-any.whl /tmp/.
 
 RUN pip install /tmp/acapy_wallet_upgrade-0.1.0-py3-none-any.whl && \
         rm /tmp/acapy_wallet_upgrade-*
