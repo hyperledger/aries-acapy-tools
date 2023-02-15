@@ -3,7 +3,7 @@
 #
 
 repository:
-  name: acapy-wallet-upgrade
+  name: aries-acapy-wallet-upgrade
   description: Hyperledger Aries
   homepage: https://wiki.hyperledger.org/display/aries
   default_branch: main
