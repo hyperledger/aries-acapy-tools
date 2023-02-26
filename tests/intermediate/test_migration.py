@@ -51,10 +51,11 @@ async def migrate_pg_db(
 @pytest.fixture
 def sqlite_temp(tmp_path: Path):
     def _sqlite_temp(actor: str):
-        src = Path(__file__).parent / "input" / f"{actor}.db"
-        dst = tmp_path / f"{actor}.db"
-        shutil.copyfile(src, dst)
-        return dst
+        input_dir = Path(__file__).parent / "input"
+        for src in input_dir.glob(f"{actor}.db*"):
+            dst = tmp_path / src.name
+            shutil.copyfile(src, dst)
+        return tmp_path / f"{actor}.db"
 
     yield _sqlite_temp
 

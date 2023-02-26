@@ -33,6 +33,46 @@ CHACHAPOLY_TAG_LEN = 16
 ENCRYPTED_KEY_LEN = CHACHAPOLY_NONCE_LEN + CHACHAPOLY_KEY_LEN + CHACHAPOLY_TAG_LEN
 
 
+class Progress:
+    """Simple progress indicator."""
+
+    def __init__(
+        self,
+        message: str,
+        report_in_progress: bool = True,
+        interval: int = 10,
+    ):
+        self.count = 0
+        self.message = message
+        self.report_in_progress = report_in_progress
+        self.interval = interval
+        self.last_reported = None
+
+        # Initial progress indicator -- let them know something is happening
+        print(message, end="")
+
+    def update(self, amount: int = 1):
+        """Update count, report if thresholds met."""
+        if self.report_in_progress:
+            passed_intervals = ((self.count % self.interval) + amount) / self.interval
+            if passed_intervals >= 1:
+                if self.count == 0:
+                    print()
+                print(f"{self.message} {self.count + amount}")
+                self.last_reported = self.count + amount
+
+        self.count += amount
+
+    def report(self):
+        """Final report."""
+        if not self.report_in_progress or self.last_reported is None:
+            print(f" {self.count}")
+            return
+
+        if self.last_reported < self.count:
+            print(f"{self.message} {self.count}")
+
+
 class Strategy(ABC):
     """Base class for upgrade strategies."""
 
@@ -139,6 +179,7 @@ class Strategy(ABC):
         indy_key: dict,
         profile_key: dict,
     ):
+        progress = Progress("Migrating items...", interval=self.batch_size)
         async for rows in wallet.fetch_pending_items(self.batch_size):
             upd = []
             for row in rows:
@@ -147,6 +188,8 @@ class Strategy(ABC):
                 )
                 upd.append(self.update_item(result, profile_key))
             await wallet.update_items(upd)
+            progress.update(len(upd))
+        progress.report()
 
     async def fetch_indy_key(self, wallet: Wallet, wallet_key: str) -> dict:
         metadata_json = await wallet.get_metadata()
@@ -192,8 +235,7 @@ class Strategy(ABC):
                 yield row
 
     async def update_keys(self, store: Store):
-        print("Updating keys...", end="")
-        upd_count = 0
+        progress = Progress("Updating keys...", interval=self.batch_size)
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(txn, "Indy::Key"):
                 await txn.remove("Indy::Key", row.name)
@@ -204,26 +246,24 @@ class Strategy(ABC):
                 key_sk = base58.b58decode(json.loads(row.value)["signkey"])
                 key = Key.from_secret_bytes("ed25519", key_sk[:32])
                 await txn.insert_key(row.name, key, metadata=meta)
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_master_keys(self, store: Store):
-        print("Updating master secret(s)...", end="")
-        upd_count = 0
+        progress = Progress("Updating master secret(s)...", interval=self.batch_size)
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(txn, "Indy::MasterSecret"):
-                if upd_count > 0:
+                if progress.count > 0:
                     raise Exception("Encountered multiple master secrets")
                 await txn.remove("Indy::MasterSecret", row.name)
                 await txn.insert("master_secret", "default", value=row.value)
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_dids(self, store: Store):
-        print("Updating DIDs...", end="")
-        upd_count = 0
+        progress = Progress("Updating DIDs...", interval=self.batch_size)
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(txn, "Indy::Did"):
                 await txn.remove("Indy::Did", row.name)
@@ -244,13 +284,12 @@ class Strategy(ABC):
                     },
                     tags={"verkey": info["verkey"]},
                 )
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_schemas(self, store: Store):
-        print("Updating stored schemas...", end="")
-        upd_count = 0
+        progress = Progress("Updating stored schemas...", interval=self.batch_size)
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(txn, "Indy::Schema"):
                 await txn.remove("Indy::Schema", row.name)
@@ -259,13 +298,14 @@ class Strategy(ABC):
                     row.name,
                     value=row.value,
                 )
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_cred_defs(self, store: Store):
-        print("Updating stored credential definitions...", end="")
-        upd_count = 0
+        progress = Progress(
+            "Updating stored credential definitions...", interval=self.batch_size
+        )
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(txn, "Indy::CredentialDefinition"):
                 await txn.remove("Indy::CredentialDefinition", row.name)
@@ -302,14 +342,16 @@ class Strategy(ABC):
                         proof.name,
                         value_json=value,
                     )
-                upd_count += 1
+                progress.update()
 
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_rev_reg_defs(self, store: Store):
-        print("Updating stored revocation registry definitions...", end="")
-        upd_count = 0
+        progress = Progress(
+            "Updating stored revocation registry definitions...",
+            interval=self.batch_size,
+        )
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
                 txn,
@@ -317,13 +359,14 @@ class Strategy(ABC):
             ):
                 await txn.remove("Indy::RevocationRegistryDefinition", row.name)
                 await txn.insert("revocation_reg_def", row.name, value=row.value)
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_rev_reg_keys(self, store: Store):
-        print("Updating stored revocation registry keys...", end="")
-        upd_count = 0
+        progress = Progress(
+            "Updating stored revocation registry keys...", interval=self.batch_size
+        )
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
                 txn, "Indy::RevocationRegistryDefinitionPrivate"
@@ -332,13 +375,14 @@ class Strategy(ABC):
                 await txn.insert(
                     "revocation_reg_def_private", row.name, value=row.value
                 )
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_rev_reg_states(self, store: Store):
-        print("Updating stored revocation registry states...", end="")
-        upd_count = 0
+        progress = Progress(
+            "Updating stored revocation registry states...", interval=self.batch_size
+        )
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
                 txn,
@@ -346,13 +390,14 @@ class Strategy(ABC):
             ):
                 await txn.remove("Indy::RevocationRegistry", row.name)
                 await txn.insert("revocation_reg", row.name, value=row.value)
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_rev_reg_info(self, store: Store):
-        print("Updating stored revocation registry info...", end="")
-        upd_count = 0
+        progress = Progress(
+            "Updating stored revocation registry info...", interval=self.batch_size
+        )
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(
                 txn,
@@ -360,22 +405,21 @@ class Strategy(ABC):
             ):
                 await txn.remove("Indy::RevocationRegistryInfo", row.name)
                 await txn.insert("revocation_reg_info", row.name, value=row.value)
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def update_creds(self, store: Store):
-        print("Updating stored credentials...", end="")
-        upd_count = 0
+        progress = Progress("Updating stored credentials...", interval=self.batch_size)
         async with store.transaction() as txn:
             async for row in self.batched_fetch_all(txn, "Indy::Credential"):
                 await txn.remove("Indy::Credential", row.name)
                 cred_data = row.value_json
                 tags = self._credential_tags(cred_data)
                 await txn.insert("credential", row.name, value=row.value, tags=tags)
-                upd_count += 1
+                progress.update()
             await txn.commit()
-        print(f" {upd_count} updated")
+        progress.report()
 
     async def convert_items_to_askar(
         self,

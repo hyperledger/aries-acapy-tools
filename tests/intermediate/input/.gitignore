@@ -2,5 +2,5 @@ dbpw/
 mwst/
 mt-mwst/
 mt-mwst-leftover-wallet/
-alice.db
-bob.db
+alice.db*
+bob.db*
