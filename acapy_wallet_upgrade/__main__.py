@@ -76,6 +76,7 @@ def config():
     parser.add_argument(
         "--batch-size",
         type=int,
+        default=50,
         help=("Specify number of items to process in each batch."),
     )
     parser.add_argument(
@@ -139,7 +140,7 @@ async def main(
     base_wallet_name: Optional[str] = None,
     base_wallet_key: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
-    batch_size: Optional[int] = 50,
+    batch_size: int = 50,
     allow_missing_wallet: Optional[bool] = False,
     delete_indy_wallets: Optional[bool] = False,
     skip_confirmation: Optional[bool] = False,
