@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 import time
+import subprocess
 from typing import Callable, Dict, Optional, cast
 
 import docker
@@ -89,6 +90,26 @@ async def test_migration_sqlite(sqlite_alice, sqlite_bob):
         uri=f"sqlite://{sqlite_bob}",
         wallet_name="bob",
         wallet_key="insecure",
+    )
+
+
+def test_migration_script(sqlite_alice):
+    """
+    Run the migration script with SQLite db files.
+    """
+    subprocess.run(
+        [
+            "askar-upgrade",
+            "--strategy",
+            "dbpw",
+            "--uri",
+            f"sqlite://{sqlite_alice}",
+            "--wallet-name",
+            "alice",
+            "--wallet-key",
+            "insecure",
+        ],
+        check=True,
     )
 
 
