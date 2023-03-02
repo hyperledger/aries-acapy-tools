@@ -124,7 +124,9 @@ class Strategy(ABC):
         for tag in tags.split(","):
             tag_name, tag_value = map(bytes.fromhex, tag.split(":"))
             name = self.decrypt_merged(tag_name, name_key)
-            value = self.decrypt_merged(tag_value, value_key) if value_key else tag[1]
+            value = (
+                self.decrypt_merged(tag_value, value_key) if value_key else tag_value
+            )
             yield name, value
 
     def decrypt_item(self, row: tuple, keys: dict, b64: bool = False):
