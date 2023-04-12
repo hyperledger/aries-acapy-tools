@@ -1,8 +1,9 @@
-FROM --platform=linux/amd64 python:3.10-slim AS base
+ARG python_version=3.10
+FROM --platform=linux/amd64 python:${python_version}-slim AS base
 
 WORKDIR /usr/src/app
-# Install and configure poetry
 
+# Install and configure poetry
 ENV POETRY_VERSION=1.3.2
 ENV POETRY_HOME=/opt/poetry
 
@@ -20,9 +21,10 @@ COPY tests/ tests/
 RUN poetry build
 
 
-FROM --platform=linux/amd64 python:3.10-slim AS askar-upgrade
+FROM --platform=linux/amd64 python:${python_version}-slim AS askar-upgrade
 COPY --from=base /usr/src/app/dist/acapy_wallet_upgrade-*-py3-none-any.whl /tmp/.
 
 RUN pip install /tmp/acapy_wallet_upgrade-*-py3-none-any.whl && \
         rm /tmp/acapy_wallet_upgrade-*
+
 ENTRYPOINT /bin/bash
