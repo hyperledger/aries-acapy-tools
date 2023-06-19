@@ -1,5 +1,5 @@
 ARG python_version=3.10
-FROM --platform=linux/amd64 python:${python_version}-slim AS base
+FROM --platform=linux/amd64 python:${python_version}-slim-bullseye AS base
 
 WORKDIR /usr/src/app
 
@@ -21,7 +21,7 @@ COPY tests/ tests/
 RUN poetry build
 
 
-FROM --platform=linux/amd64 python:${python_version}-slim AS askar-upgrade
+FROM --platform=linux/amd64 python:${python_version}-slim-bullseye AS askar-upgrade
 COPY --from=base /usr/src/app/dist/acapy_wallet_upgrade-*-py3-none-any.whl /tmp/.
 
 RUN pip install /tmp/acapy_wallet_upgrade-*-py3-none-any.whl && \
