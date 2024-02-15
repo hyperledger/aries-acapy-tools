@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import sys
+import json
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
@@ -74,6 +75,15 @@ def config():
         ),
     )
     parser.add_argument(
+        "--wallet-keys-file",
+        type=str,
+        help=(
+            "Specify a file containing mapping of wallet_name to wallet_key "
+            "for all wallets to be migrated in the MultiWalletSingleTable "
+            "as stores (mwst-as-stores) strategy."
+        ),
+    )
+    parser.add_argument(
         "--batch-size",
         type=int,
         default=50,
@@ -122,7 +132,7 @@ def config():
             raise ValueError("Base wallet key required for mwst-as-profiles strategy")
 
     if args.strategy == "mwst-as-stores":
-        if not args.wallet_keys:
+        if not args.wallet_keys and not args.wallet_keys_file:
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
 
     parsed = urlparse(args.uri)
@@ -140,6 +150,7 @@ async def main(
     base_wallet_name: Optional[str] = None,
     base_wallet_key: Optional[str] = None,
     wallet_keys: Optional[Dict[str, str]] = None,
+    wallet_keys_file: Optional[str] = None,
     batch_size: int = 50,
     allow_missing_wallet: Optional[bool] = False,
     delete_indy_wallets: Optional[bool] = False,
@@ -183,6 +194,9 @@ async def main(
     elif strategy == "mwst-as-stores":
         if parsed.scheme != "postgres":
             raise ValueError("mwst-as-stores strategy only valid for Postgres")
+        if wallet_keys_file:
+            with open(wallet_keys_file, "r") as wkf:
+                wallet_keys = json.load(wkf)
 
         if not wallet_keys:
             raise ValueError("Wallet keys required for mwst-as-stores strategy")
