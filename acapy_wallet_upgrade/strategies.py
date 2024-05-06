@@ -17,9 +17,10 @@ import base58
 import cbor2
 import msgpack
 import nacl.pwhash
+from nacl.exceptions import CryptoError
 
 from .db_connection import DbConnection, Wallet
-from .error import UpgradeError, MissingWalletError
+from .error import DecryptionFailedError, UpgradeError, MissingWalletError
 from .pg_connection import PgConnection, PgWallet
 from .pg_mwst_connection import PgMWSTConnection
 from .sqlite_connection import SqliteConnection
@@ -182,16 +183,26 @@ class Strategy(ABC):
         profile_key: dict,
     ):
         progress = Progress("Migrating items...", interval=self.batch_size)
-        async for rows in wallet.fetch_pending_items(self.batch_size):
-            upd = []
-            for row in rows:
-                result = self.decrypt_item(
-                    row, indy_key, b64=isinstance(wallet, PgWallet)
-                )
-                upd.append(self.update_item(result, profile_key))
-            await wallet.update_items(upd)
-            progress.update(len(upd))
-        progress.report()
+        decrypted_at_least_one = False
+        try:
+            async for rows in wallet.fetch_pending_items(self.batch_size):
+                upd = []
+                for row in rows:
+                    result = self.decrypt_item(
+                        row, indy_key, b64=isinstance(wallet, PgWallet)
+                    )
+                    decrypted_at_least_one = True
+                    upd.append(self.update_item(result, profile_key))
+                await wallet.update_items(upd)
+                progress.update(len(upd))
+            progress.report()
+        except CryptoError as err:
+            if decrypted_at_least_one:
+                raise UpgradeError(
+                    "Failed to decrypt an item after successfully decrypting others"
+                ) from err
+            else:
+                raise DecryptionFailedError("Could not decrypt any items from wallet")
 
     async def fetch_indy_key(self, wallet: Wallet, wallet_key: str) -> dict:
         metadata_json = await wallet.get_metadata()
@@ -794,6 +805,10 @@ class MwstAsStoresStrategy(Strategy):
                 profile_key = await self.init_profile(wallet, wallet_name, indy_key)
                 await self.update_items(wallet, indy_key, profile_key)
                 await new_db_conn.finish_upgrade()
+            except UpgradeError as err:
+                raise UpgradeError(
+                    f"Failed to upgrade wallet {wallet_name}; bad wallet key given?"
+                ) from err
             finally:
                 await new_db_conn.close()
 
