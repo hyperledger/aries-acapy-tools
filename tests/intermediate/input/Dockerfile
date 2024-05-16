@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.12
 WORKDIR /usr/src/app
 RUN pip install git+https://github.com/indicio-tech/acapy-minimal-example.git@main
 ADD populate_db.py .
