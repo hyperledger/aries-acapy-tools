@@ -28,7 +28,7 @@ msgpack = "~=1.0"
 PyNaCl = "~=1.4"
 
 [tool.poetry.group.dev.dependencies]
-black = "<24.4.0"
+black = "<24.5.0"
 flake8 = "<6.0.0"
 pytest = "<7.2.0"
 pytest-asyncio = "<0.20.3"
