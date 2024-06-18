@@ -30,7 +30,7 @@ PyNaCl = "~=1.4"
 [tool.poetry.group.dev.dependencies]
 black = "<24.4.0"
 flake8 = "<6.0.0"
-pytest = "<7.2.0"
+pytest = "<7.5.0"
 pytest-asyncio = "<0.20.3"
 pre-commit = "<2.21.0"
 controller = {git = "https://github.com/indicio-tech/acapy-minimal-example.git", rev = "main"}
