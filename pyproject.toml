@@ -20,7 +20,7 @@ repository = "https://github.com/indicio-tech/acapy-wallet-upgrade"
 [tool.poetry.dependencies]
 python = "^3.10"
 aiosqlite = "~=0.17"
-aries-askar = "~=0.2"
+aries-askar = "~=0.3"
 asyncpg = "~=0.22"
 base58 = "~=1.0"
 cbor2 = "~=5.2"
