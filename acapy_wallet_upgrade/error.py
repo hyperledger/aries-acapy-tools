@@ -1,6 +1,13 @@
+"""Errors that can occur on upgrade."""
+
+
 class UpgradeError(Exception):
-    pass
+    """Raised on error during upgrade."""
 
 
 class MissingWalletError(UpgradeError):
-    pass
+    """Raised when a wallet is missing from the wallet keys input."""
+
+
+class DecryptionFailedError(UpgradeError):
+    """Raised when unable to decrypt an item from the source wallet."""
