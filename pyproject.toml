@@ -1,12 +1,13 @@
 [tool.poetry]
-name = "acapy-wallet-upgrade"
+name = "askar-tools"
 version = "0.1.0"
-description = "Migrate ACA-Py from Indy SDK to Aries Askar"
+description = "Tools for managing Aries Askar wallets"
 authors = [
 	"Andrew Whitehead <cywolf@gmail.com>",
 	"Adam Burdett <burdettadam@gmail.com>",
 	"Char Howland <char@indicio.tech>",
-	"Daniel Bluhm <dbluhm@pm.me>"
+	"Daniel Bluhm <dbluhm@pm.me>",
+	"Jamie Hale <jamiehalebc@gmail.com>"
 ]
 license = "Apache-2.0"
 classifiers = [
@@ -15,7 +16,7 @@ classifiers = [
 	"Operating System :: OS Independent",
 ]
 readme = "README.md"
-repository = "https://github.com/indicio-tech/acapy-wallet-upgrade"
+repository = "https://github.com/hyperledger/aries-acapy-tools.git"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -33,11 +34,12 @@ flake8 = "<6.0.0"
 pytest = "<7.5.0"
 pytest-asyncio = "<0.20.3"
 pre-commit = "<2.21.0"
-controller = {git = "https://github.com/indicio-tech/acapy-minimal-example.git", rev = "main"}
-docker = "^6.0.1"
+acapy-controller = {git = "https://github.com/indicio-tech/acapy-minimal-example.git", rev = "main"}
+docker = "7.1.0"
 
 [tool.poetry.scripts]
 askar-upgrade = "acapy_wallet_upgrade.__main__:entrypoint"
+askar-tools = "askar_tools.__main__:entrypoint"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

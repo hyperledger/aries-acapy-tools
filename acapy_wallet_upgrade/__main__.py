@@ -2,9 +2,9 @@
 
 import argparse
 import asyncio
+import json
 import logging
 import sys
-import json
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
@@ -15,7 +15,6 @@ from .strategies import DbpwStrategy, MwstAsProfilesStrategy, MwstAsStoresStrate
 
 
 def config():
-
     parser = argparse.ArgumentParser("askar-upgarde")
     parser.add_argument(
         "--strategy",

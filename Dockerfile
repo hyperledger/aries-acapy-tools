@@ -4,7 +4,7 @@ FROM --platform=linux/amd64 python:${python_version}-slim AS base
 WORKDIR /usr/src/app
 
 # Install and configure poetry
-ENV POETRY_VERSION=1.3.2
+ENV POETRY_VERSION=1.8.3
 ENV POETRY_HOME=/opt/poetry
 
 RUN apt-get update && apt-get install --yes curl && apt-get clean
@@ -17,14 +17,15 @@ RUN poetry config virtualenvs.in-project true
 # Setup project
 COPY pyproject.toml poetry.lock README.md ./
 COPY acapy_wallet_upgrade/ acapy_wallet_upgrade/
+COPY askar_tools/ askar_tools/
 COPY tests/ tests/
 RUN poetry build
 
 
 FROM --platform=linux/amd64 python:${python_version}-slim AS askar-upgrade
-COPY --from=base /usr/src/app/dist/acapy_wallet_upgrade-*-py3-none-any.whl /tmp/.
+COPY --from=base /usr/src/app/dist/askar_tools-*-py3-none-any.whl /tmp/.
 
-RUN pip install /tmp/acapy_wallet_upgrade-*-py3-none-any.whl && \
-        rm /tmp/acapy_wallet_upgrade-*
+RUN pip install /tmp/askar_tools-*-py3-none-any.whl && \
+        rm /tmp/askar_tools-*
 
 ENTRYPOINT /bin/bash
