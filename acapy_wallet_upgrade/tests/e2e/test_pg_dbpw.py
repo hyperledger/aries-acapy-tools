@@ -1,12 +1,10 @@
-from controller import Controller
 import pytest
-
-from .cases import MigrationTestCases
-from .containers import Containers
-
+from acapy_controller import Controller
 from acapy_wallet_upgrade.__main__ import main
 
 from . import WalletTypeToBeTested
+from .cases import MigrationTestCases
+from .containers import Containers
 
 
 class TestPgDBPW(WalletTypeToBeTested):
@@ -37,14 +35,14 @@ class TestPgDBPW(WalletTypeToBeTested):
         # Migrate
         await main(
             strategy="dbpw",
-            uri=f"postgres://postgres:mysecretpassword@localhost:5432/alice",
+            uri="postgres://postgres:mysecretpassword@localhost:5432/alice",
             wallet_name="alice",
             wallet_key="insecure",
         )
 
         await main(
             strategy="dbpw",
-            uri=f"postgres://postgres:mysecretpassword@localhost:5432/bob",
+            uri="postgres://postgres:mysecretpassword@localhost:5432/bob",
             wallet_name="bob",
             wallet_key="insecure",
         )

@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 import base64
 import contextlib
 import hashlib
@@ -8,19 +7,20 @@ import logging
 import os
 import re
 import sys
+from abc import ABC, abstractmethod
 from typing import Dict, Optional, Union, cast
 from urllib.parse import urlparse
 
-from aries_askar import Key, Store, Session
 import asyncpg
 import base58
 import cbor2
 import msgpack
 import nacl.pwhash
+from aries_askar import Key, Session, Store
 from nacl.exceptions import CryptoError
 
 from .db_connection import DbConnection, Wallet
-from .error import DecryptionFailedError, UpgradeError, MissingWalletError
+from .error import DecryptionFailedError, MissingWalletError, UpgradeError
 from .pg_connection import PgConnection, PgWallet
 from .pg_mwst_connection import PgMWSTConnection
 from .sqlite_connection import SqliteConnection
@@ -119,15 +119,11 @@ class Strategy(ABC):
             ciphertext, None, nonce, key
         )
 
-    def decrypt_tags(
-        self, tags: str, name_key: bytes, value_key: Optional[bytes] = None
-    ):
+    def decrypt_tags(self, tags: str, name_key: bytes, value_key: Optional[bytes] = None):
         for tag in tags.split(","):
             tag_name, tag_value = map(bytes.fromhex, tag.split(":"))
             name = self.decrypt_merged(tag_name, name_key)
-            value = (
-                self.decrypt_merged(tag_value, value_key) if value_key else tag_value
-            )
+            value = self.decrypt_merged(tag_value, value_key) if value_key else tag_value
             yield name, value
 
     def decrypt_item(self, row: tuple, keys: dict, b64: bool = False):
@@ -137,16 +133,12 @@ class Strategy(ABC):
         tags = [
             (0, k, v)
             for k, v in (
-                (
-                    self.decrypt_tags(tags_enc, keys["tag_name"], keys["tag_value"])
-                    if tags_enc
-                    else ()
-                )
+                self.decrypt_tags(tags_enc, keys["tag_name"], keys["tag_value"])
+                if tags_enc
+                else ()
             )
         ]
-        for k, v in (
-            self.decrypt_tags(tags_plain, keys["tag_name"]) if tags_plain else ()
-        ):
+        for k, v in self.decrypt_tags(tags_plain, keys["tag_name"]) if tags_plain else ():
             tags.append((1, k, v))
         return {
             "id": row_id,
@@ -385,9 +377,7 @@ class Strategy(ABC):
                 txn, "Indy::RevocationRegistryDefinitionPrivate"
             ):
                 await txn.remove("Indy::RevocationRegistryDefinitionPrivate", row.name)
-                await txn.insert(
-                    "revocation_reg_def_private", row.name, value=row.value
-                )
+                await txn.insert("revocation_reg_def_private", row.name, value=row.value)
                 progress.update()
             await txn.commit()
         progress.report()
@@ -618,9 +608,7 @@ class MwstAsProfilesStrategy(Strategy):
     ):
         """Migrate one wallet."""
         indy_key = await self.fetch_indy_key(wallet, wallet_key)
-        profile_key = await self.init_profile(
-            wallet, wallet_id, base_indy_key, indy_key
-        )
+        profile_key = await self.init_profile(wallet, wallet_id, base_indy_key, indy_key)
         await self.update_items(wallet, indy_key, profile_key)
 
     async def get_wallet_info(self, uri: str):
@@ -792,7 +780,6 @@ class MwstAsStoresStrategy(Strategy):
         )
 
         for wallet_name, wallet_key in self.wallet_keys.items():
-
             # Connect to new database
             new_db_conn: PgMWSTConnection = self.create_new_db_connection(wallet_name)
             await new_db_conn.connect()
