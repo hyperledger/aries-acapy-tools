@@ -1,7 +1,6 @@
-from controller import Controller
-from controller.models import CreateWalletResponse
 import pytest
-
+from acapy_controller import Controller
+from acapy_controller.models import CreateWalletResponse
 from acapy_wallet_upgrade.__main__ import main
 
 from . import WalletTypeToBeTested
@@ -66,7 +65,7 @@ class TestPgMWSTProfiles(WalletTypeToBeTested):
         # Migrate
         await main(
             strategy="mwst-as-profiles",
-            uri=f"postgres://postgres:mysecretpassword@localhost:5432/wallets",
+            uri="postgres://postgres:mysecretpassword@localhost:5432/wallets",
             base_wallet_name="agency",
             base_wallet_key="agency_insecure0",
         )
