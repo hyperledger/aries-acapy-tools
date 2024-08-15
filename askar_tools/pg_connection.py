@@ -85,3 +85,26 @@ class PgConnection(DbConnection):
                 )
 
         return result
+
+    async def create_database(self, base_wallet_name, sub_wallet_name):
+        """Create an postgres database."""
+        await self._conn.execute(
+            f"""
+            CREATE DATABASE {sub_wallet_name};
+            """
+        )
+
+    async def remove_wallet(self, base_wallet_name, sub_wallet_name):
+        """Remove the postgres wallet."""
+        # Kill any connections to the database
+        await self._conn.execute(
+            f"""
+            SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{sub_wallet_name}';
+            """
+        )
+        # Drop the database
+        await self._conn.execute(
+            f"""
+            DROP DATABASE {sub_wallet_name};
+            """
+        )

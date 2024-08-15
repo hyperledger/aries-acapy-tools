@@ -21,7 +21,7 @@ repository = "https://github.com/hyperledger/aries-acapy-tools.git"
 [tool.poetry.dependencies]
 python = "^3.10"
 aiosqlite = "~=0.17"
-aries-askar = "~=0.2"
+aries-askar-jamshale = {version = "^0.3.3b0", source = "testpypi"}
 asyncpg = "~=0.22"
 base58 = "~=1.0"
 cbor2 = "~=5.2"
@@ -41,6 +41,11 @@ docker = "7.1.0"
 [tool.poetry.scripts]
 askar-upgrade = "acapy_wallet_upgrade.__main__:entrypoint"
 askar-tools = "askar_tools.__main__:entrypoint"
+
+[[tool.poetry.source]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+priority = "supplemental"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

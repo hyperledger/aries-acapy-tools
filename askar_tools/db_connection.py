@@ -25,3 +25,11 @@ class DbConnection(ABC):
     @abstractmethod
     async def get_profiles(self):
         """Get the root config table of the wallet."""
+
+    @abstractmethod
+    async def create_database(self, admin_wallet_name, sub_wallet_name):
+        """Create a database."""
+
+    @abstractmethod
+    async def remove_wallet(self, admin_wallet_name, sub_wallet_name):
+        """Remove the wallet."""
