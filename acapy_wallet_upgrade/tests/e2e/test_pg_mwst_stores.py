@@ -1,12 +1,10 @@
-from controller import Controller
 import pytest
-
-from .cases import MigrationTestCases
-from .containers import Containers
-
+from acapy_controller import Controller
 from acapy_wallet_upgrade.__main__ import main
 
 from . import WalletTypeToBeTested
+from .cases import MigrationTestCases
+from .containers import Containers
 
 
 class TestPgMWSTStores(WalletTypeToBeTested):
@@ -40,7 +38,7 @@ class TestPgMWSTStores(WalletTypeToBeTested):
         # Migrate
         await main(
             strategy="mwst-as-stores",
-            uri=f"postgres://postgres:mysecretpassword@localhost:5432/wallets",
+            uri="postgres://postgres:mysecretpassword@localhost:5432/wallets",
             wallet_keys={
                 "alice": "alice_insecure1",
                 "bob": "bob_insecure1",

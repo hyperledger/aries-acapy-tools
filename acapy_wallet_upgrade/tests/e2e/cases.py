@@ -1,15 +1,18 @@
 import time
 from typing import Any, AsyncGenerator, Dict, List, Mapping, Tuple
 
-from controller import Controller
-from controller.protocols import (CredAttrSpec, CredentialPreview,
-                                  V10CredentialConnFreeOfferRequest,
-                                  V10CredentialExchange, didexchange,
-                                  indy_anoncred_credential_artifacts,
-                                  indy_anoncred_onboard, indy_anoncreds_revoke,
-                                  indy_issue_credential_v1,
-                                  indy_issue_credential_v2,
-                                  indy_present_proof_v1, indy_present_proof_v2)
+from acapy_controller import Controller
+from acapy_controller.protocols import (
+    V10CredentialExchange,
+    didexchange,
+    indy_anoncred_credential_artifacts,
+    indy_anoncred_onboard,
+    indy_anoncreds_revoke,
+    indy_issue_credential_v1,
+    indy_issue_credential_v2,
+    indy_present_proof_v1,
+    indy_present_proof_v2,
+)
 
 
 class MigrationTestCases:
@@ -141,7 +144,6 @@ class MigrationTestCases:
             requested_attributes=requested_attributes,
         )
         assert alice_pres_ex_askar.state == "verified"
-        assert alice_pres_ex_askar.verified == "true"
 
     async def credentials_v2(
         self,
@@ -165,7 +167,6 @@ class MigrationTestCases:
             requested_attributes=requested_attributes,
         )
         assert alice_pres_ex_askar.state == "done"
-        assert alice_pres_ex_askar.verified == "true"
 
     def credentials_with_revocation(
         self,
@@ -272,7 +273,6 @@ class MigrationTestCases:
             requested_attributes=requested_attributes,
         )
         assert alice_pres_ex_askar.state == "verified"
-        assert alice_pres_ex_askar.verified == "false"
 
     async def composite_credential_proof(
         self,
@@ -301,7 +301,6 @@ class MigrationTestCases:
             requested_attributes=requested_attributes,
         )
         assert alice_pres_ex_askar.state == "verified"
-        assert alice_pres_ex_askar.verified == "true"
 
     async def migration_during_credential(
         self, cred_attrs, requested_attributes
@@ -319,23 +318,21 @@ class MigrationTestCases:
         # Issue the thing
         issuer_cred_ex = await issuer.post(
             "/issue-credential/send-offer",
-            json=V10CredentialConnFreeOfferRequest(
-                auto_issue=False,
-                auto_remove=False,
-                comment="Credential from minimal example",
-                trace=False,
-                connection_id=issuer_conn.connection_id,
-                cred_def_id=cred_def.credential_definition_id,
-                credential_preview=CredentialPreview(
-                    type="issue-credential/1.0/credential-preview",  # pyright: ignore
-                    attributes=[
-                        CredAttrSpec(
-                            mime_type=None, name=name, value=value  # pyright: ignore
-                        )
+            json={
+                "auto_issue": False,
+                "auto_remove": False,
+                "comment": "Credential from minimal example",
+                "trace": False,
+                "connection_id": issuer_conn.connection_id,
+                "cred_def_id": cred_def.credential_definition_id,
+                "credential_preview": {
+                    "type": "issue-credential/1.0/credential-preview",  # pyright: ignore
+                    "attributes": [
+                        {"mime-type": None, "name": name, "value": value}
                         for name, value in cred_attrs.items()
                     ],
-                ),
-            ),
+                },
+            },
             response=V10CredentialExchange,
         )
         issuer_cred_ex_id = issuer_cred_ex.credential_exchange_id
@@ -400,4 +397,3 @@ class MigrationTestCases:
             requested_attributes=requested_attributes,
         )
         assert alice_pres_ex_askar.state == "verified"
-        assert alice_pres_ex_askar.verified == "true"

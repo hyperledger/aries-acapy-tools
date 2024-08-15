@@ -1,7 +1,8 @@
 import asyncio
 
-import docker
 import pytest
+
+import docker
 
 from .containers import Containers
 
@@ -9,8 +10,8 @@ from .containers import Containers
 class WalletTypeToBeTested:
     @pytest.fixture(scope="class")
     def event_loop(self):
-        policy = asyncio.get_event_loop_policy()
-        loop = policy.new_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         yield loop
         loop.close()
 
