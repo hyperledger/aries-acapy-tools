@@ -1,12 +1,10 @@
-from controller import Controller
 import pytest
-
-from .cases import MigrationTestCases
-from .containers import Containers
-
+from acapy_controller import Controller
 from acapy_wallet_upgrade.__main__ import main
 
 from . import WalletTypeToBeTested
+from .cases import MigrationTestCases
+from .containers import Containers
 
 
 class TestSqliteDBPW(WalletTypeToBeTested):
