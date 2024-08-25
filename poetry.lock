@@ -190,25 +190,20 @@ files = [
 ]
 
 [[package]]
-name = "aries-askar-jamshale"
-version = "0.3.3b11"
+name = "aries-askar"
+version = "0.3.2"
 description = ""
 optional = false
 python-versions = ">=3.6.3"
 files = [
-    {file = "aries_askar_jamshale-0.3.3b11-py3-none-macosx_10_9_universal2.whl", hash = "sha256:542cf023a5635a59af2aff911ceb5ffe393780a932ab67ccbbcf6540f3d1b0fb"},
-    {file = "aries_askar_jamshale-0.3.3b11-py3-none-manylinux2014_aarch64.whl", hash = "sha256:0142acc15b90e360badbc26609e3882c279d903dfb2208b9f008fb777d680916"},
-    {file = "aries_askar_jamshale-0.3.3b11-py3-none-manylinux2014_x86_64.whl", hash = "sha256:6b0ac7497ddc43d4910f26879132688c29af805c9763dd95dace4dfc2c9193bb"},
-    {file = "aries_askar_jamshale-0.3.3b11-py3-none-win_amd64.whl", hash = "sha256:5c5504d3540c9d36134eb625a8765cdac7a5906a996a21708945a2555d3104a6"},
+    {file = "aries_askar-0.3.2-py3-none-macosx_10_9_universal2.whl", hash = "sha256:02ddbe1773ce72c57edafff5777a1337d4a678da7484596712949170fb3ca1dc"},
+    {file = "aries_askar-0.3.2-py3-none-manylinux2014_aarch64.whl", hash = "sha256:176eebcf833bb9974a162fd931c8d67669e4f0145b351ce9cb1289fd2d5a345c"},
+    {file = "aries_askar-0.3.2-py3-none-manylinux2014_x86_64.whl", hash = "sha256:63f9ab97db4778ced830a6d1135e1f8bd1ca564de27218bd114f1cffbd31b04c"},
+    {file = "aries_askar-0.3.2-py3-none-win_amd64.whl", hash = "sha256:6b4253377d5ed167ed94790e49c58584b68f897d2541ac4bb18fd37e9264164b"},
 ]
 
 [package.dependencies]
 cached-property = ">=1.5.2,<1.6.0"
-
-[package.source]
-type = "legacy"
-url = "https://test.pypi.org/simple"
-reference = "testpypi"
 
 [[package]]
 name = "async-selective-queue"
@@ -849,13 +844,13 @@ license = ["ukkonen"]
 
 [[package]]
 name = "idna"
-version = "3.7"
+version = "3.8"
 description = "Internationalized Domain Names in Applications (IDNA)"
 optional = false
-python-versions = ">=3.5"
+python-versions = ">=3.6"
 files = [
-    {file = "idna-3.7-py3-none-any.whl", hash = "sha256:82fee1fc78add43492d3a1898bfa6d8a904cc97d8427f683ed8e798d07761aa0"},
-    {file = "idna-3.7.tar.gz", hash = "sha256:028ff3aadf0609c1fd278d8ea3089299412a7a8b9bd005dd08b9f8285bcb5cfc"},
+    {file = "idna-3.8-py3-none-any.whl", hash = "sha256:050b4e5baadcd44d760cedbd2b8e639f2ff89bbc7a5730fcc662954303377aac"},
+    {file = "idna-3.8.tar.gz", hash = "sha256:d838c2c0ed6fced7693d5e8ab8e734d5f8fda53a039c0164afb0b82e771e3603"},
 ]
 
 [[package]]
@@ -1652,4 +1647,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "046f37ea8d14266f67ed7672f31cf3fd86d7973b134b3363078f71f0be8561f0"
+content-hash = "b57599424f9d2715e7ad2be4f3ae816cf1ad368fa4c83806a1088456c2395123"
