@@ -56,10 +56,9 @@ class MultiWalletConverter:
         """Converts a single wallet to a multi-wallet."""
 
         print("Converting multitenant single-wallet agent to multi-wallet...")
-
         print(f"Opening admin store [{self.admin_wallet_name}]...")
         print(f"Opening sub wallet store [{self.sub_wallet_name}]...")
-        print(f"{self.conn.uri}")
+
         if f"{self.admin_wallet_name}" not in self.conn.uri:
             raise ConversionError("The wallet name must be included in the URI.")
 
@@ -73,7 +72,8 @@ class MultiWalletConverter:
         except Exception as e:
             print(e)
             raise ConversionError(
-                f"Error opening sub wallet store {self.sub_wallet_name}. Are you sure this is a multitenant wallet and you have the name correct?"  # noqa: E501
+                f"""Error opening sub wallet store {self.sub_wallet_name}. Are you sure 
+                this is a multitenant wallet and you have the name correct?"""
             )
 
         admin_store_scan = admin_store.scan()
@@ -91,7 +91,8 @@ class MultiWalletConverter:
                     )
                 )
                 print(
-                    f"Copying wallet {wallet_record['settings']['wallet.id']} : {wallet_record['settings']['wallet.name']} ..."  # noqa: E501
+                    f"""Copying wallet {wallet_record['settings']['wallet.id']} : 
+                    {wallet_record['settings']['wallet.name']}..."""
                 )
 
                 # Get the tenant profile store and set it as the default profile
@@ -128,17 +129,19 @@ class MultiWalletConverter:
                     if profile != wallet_record["settings"]["wallet.id"]:
                         await new_tenant_store.remove_profile(profile)
             except Exception as e:
-                print(
-                    f"There was an error copying the wallet {wallet_record["settings"]["wallet.name"]}. The sub wallet {self.sub_wallet_name} will not be deleted. Try running again."  # noqa: E501
-                )
                 print(e)
+                print(
+                    f"""There was an error copying the wallet 
+                    {wallet_record["settings"]["wallet.name"]}. The sub wallet 
+                    {self.sub_wallet_name} will not be deleted. Try running again."""
+                )
                 await self.conn.remove_wallet(
                     self.admin_wallet_name, wallet_record["settings"]["wallet.name"]
                 )
                 success = False
 
         if success:
-            print(f"Deleting sub wallet [{self.sub_wallet_name}]...")
+            print(f"Deleting sub wallet {self.sub_wallet_name}...")
             await sub_wallet_store.close()
             await self.conn.remove_wallet(self.admin_wallet_name, self.sub_wallet_name)
 
