@@ -89,6 +89,11 @@ class BaseTestCases:
         )
 
 
+class MtConvertToMwTestCases(BaseTestCases):
+    def __init__(self):
+        self._cases = (self.connections(), self.credentials_with_revocation())
+
+
 class ExportTestCases(BaseTestCases):
     def __init__(self):
         self._cases = (self.connections(), self.credentials_with_revocation())

@@ -48,7 +48,7 @@ class TestPgExport(WalletTypeToBeTested):
         containers.stop(bob_container)
         containers.stop(postgres)
 
-        # Assert: TODO: could check file contents
+        # Assert: TODO: check file contents
         assert found_export_file
 
     @pytest.mark.asyncio

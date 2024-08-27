@@ -1,3 +1,6 @@
+import os
+import shutil
+import sqlite3
 from urllib.parse import urlparse
 
 import aiosqlite
@@ -58,3 +61,40 @@ class SqliteConnection(DbConnection):
             result.append({row[0]: [row[1], row[2]]})
 
         return result
+
+    async def create_database(self, admin_wallet_name, sub_wallet_name):
+        """Create an sqlite database."""
+        directory = (
+            urlparse(self.uri)
+            .path.replace("/sqlite.db", "")
+            .replace(admin_wallet_name, sub_wallet_name)
+        )
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        db_path = os.path.join(directory, "sqlite.db")
+        conn = None
+        try:
+            conn = sqlite3.connect(db_path)
+        except sqlite3.Error as e:
+            print(e)
+        finally:
+            if conn:
+                conn.close()
+
+    async def remove_wallet(self, admin_wallet_name, sub_wallet_name):
+        """Remove the sqlite wallet."""
+        directory = (
+            urlparse(self.uri)
+            .path.replace("/sqlite.db", "")
+            .replace(admin_wallet_name, sub_wallet_name)
+        )
+        try:
+            shutil.rmtree(directory)
+            print(f"Successfully deleted {directory}")
+        except FileNotFoundError:
+            print(f"Directory {directory} does not exist")
+        except PermissionError:
+            print(f"Permission denied to delete {directory}")
+        except Exception as e:
+            print(f"An error occurred: {e}")

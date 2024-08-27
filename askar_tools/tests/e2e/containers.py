@@ -176,6 +176,8 @@ class Containers:
         wallet_type: str,
         volume_src: str,
         volume_dst: str,
+        sub_wallet_src: Optional[str] = None,
+        sub_wallet_dst: Optional[str] = None,
         mt: bool = False,
         askar_profile: bool = False,
     ) -> Container:
@@ -209,18 +211,27 @@ class Containers:
             command += """
                 --multitenancy-config wallet_type=askar-profile
             """
-
-        return self.acapy(
-            name,
-            admin_port,
-            command=command,
-            volumes={
+        volumes = {}
+        if sub_wallet_src and sub_wallet_dst:
+            volumes = {
                 volume_src: {
                     "bind": volume_dst,
                     "mode": "rw,z",
                 },
-            },
-        )
+                sub_wallet_src: {
+                    "bind": sub_wallet_dst,
+                    "mode": "rw,z",
+                },
+            }
+        else:
+            volumes = {
+                volume_src: {
+                    "bind": volume_dst,
+                    "mode": "rw,z",
+                }
+            }
+
+        return self.acapy(name, admin_port, command=command, volumes=volumes)
 
     def acapy_postgres(
         self,

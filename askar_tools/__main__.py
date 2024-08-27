@@ -8,6 +8,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from .exporter import Exporter
+from .multi_wallet_converter import MultiWalletConverter
 from .pg_connection import PgConnection
 from .sqlite_connection import SqliteConnection
 
@@ -18,7 +19,7 @@ def config():
     parser.add_argument(
         "--strategy",
         required=True,
-        choices=["export"],
+        choices=["export", "mt-convert-to-mw"],
         help=(
             "Specify migration strategy depending on database type, wallet "
             "management mode, and agent type."
@@ -45,6 +46,15 @@ def config():
             "be migrated for database per wallet (export) migration strategy."
         ),
     )
+    parser.add_argument(
+        "--multitenant-sub-wallet-name",
+        type=str,
+        help=(
+            "The existing wallet name for a multitenant single wallet conversion."
+            "The default if not provided is 'multitenant_sub_wallet'"
+        ),
+        default="multitenant_sub_wallet",
+    )
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     if args.strategy == "export":
@@ -60,7 +70,8 @@ async def main(
     strategy: str,
     uri: str,
     wallet_name: Optional[str] = None,
-    wallet_key: Optional[str] = None
+    wallet_key: Optional[str] = None,
+    multitenant_sub_wallet_name: Optional[str] = "multitenant_sub_wallet",
 ):
     """Run the main function."""
     logging.basicConfig(level=logging.WARN)
@@ -79,6 +90,14 @@ async def main(
         await conn.connect()
         print("wallet_name", wallet_name)
         method = Exporter(conn=conn, wallet_name=wallet_name, wallet_key=wallet_key)
+    elif strategy == "mt-convert-to-mw":
+        await conn.connect()
+        method = MultiWalletConverter(
+            conn=conn,
+            wallet_name=wallet_name,
+            wallet_key=wallet_key,
+            sub_wallet_name=multitenant_sub_wallet_name,
+        )
     else:
         raise Exception("Invalid strategy")
 
