@@ -99,11 +99,13 @@ class Containers:
         self.containers.remove(container)
         container.stop()
 
-    def postgres(self, port: int, volume: Optional[str] = None) -> Container:
+    def postgres(
+        self, port: int, volume: Optional[str] = None, name: Optional[str] = "postgres"
+    ) -> Container:
         """Create a postgres container."""
         container = self.client.containers.run(
             self.POSTGRES_IMAGE,
-            name="postgres",
+            name=name,
             volumes={volume: {"bind": "/var/lib/postgresql/data", "mode": "rw,z"}}
             if volume
             else None,

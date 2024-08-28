@@ -17,6 +17,7 @@ class Exporter:
         conn: SqliteConnection | PgConnection,
         wallet_name: str,
         wallet_key: str,
+        export_filename: str = "wallet_export.json",
     ):
         """Initialize the Exporter object.
 
@@ -28,6 +29,7 @@ class Exporter:
         self.conn = conn
         self.wallet_name = wallet_name
         self.wallet_key = wallet_key
+        self.export_filename = export_filename
 
     async def _get_decoded_items_and_tags(self, store):
         scan = store.scan()
@@ -62,7 +64,7 @@ class Exporter:
 
         tables["profiles"] = await self.conn.get_profiles()
 
-        with open("wallet_export.json", "w") as json_file:
+        with open(self.export_filename, "w") as json_file:
             json.dump(tables, json_file, indent=4)
 
         await store.close()

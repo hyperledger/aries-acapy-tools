@@ -8,7 +8,7 @@ from .cases import MtConvertToMwTestCases
 from .containers import Containers
 
 
-class TestPgMtConvertToMw(WalletTypeToBeTested):
+class TestMultitenantConvertToMultiwallet(WalletTypeToBeTested):
     @pytest.mark.asyncio
     @pytest.mark.e2e
     async def test_conversion_pg(self, containers: Containers):
