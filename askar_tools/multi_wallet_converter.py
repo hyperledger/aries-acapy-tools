@@ -3,14 +3,9 @@
 from aries_askar import Store
 
 from .error import ConversionError
+from .key_methods import KEY_METHODS
 from .pg_connection import PgConnection
 from .sqlite_connection import SqliteConnection
-
-KEY_METHODS = {
-    "KEY_DERIVATION_RAW": "RAW",
-    "KEY_DERIVATION_ARGON2I_INT": "kdf:argon2i:int",
-    "KEY_DERIVATION_ARGON2I_MOD": "kdf:argon2i:mod",
-}
 
 
 class MultiWalletConverter:
@@ -21,6 +16,7 @@ class MultiWalletConverter:
         conn: SqliteConnection | PgConnection,
         wallet_name: str,
         wallet_key: str,
+        wallet_key_derivation_method: str,
         sub_wallet_name: str,
     ):
         """Initialize the MultiWalletConverter instance.
@@ -29,11 +25,13 @@ class MultiWalletConverter:
             conn (SqliteConnection): The SQLite connection object.
             wallet_name (str): The name of the wallet.
             wallet_key (str): The key for the wallet.
+            wallet_key_derivation_method (str): The key derivation method for the wallet.
             sub_wallet_name (str): The name of the sub wallet.
         """
         self.conn = conn
         self.admin_wallet_name = wallet_name
         self.admin_wallet_key = wallet_key
+        self.wallet_key_derivation_method = wallet_key_derivation_method
         self.sub_wallet_name = sub_wallet_name
 
     def get_wallet_records(self, entries):
@@ -87,7 +85,7 @@ class MultiWalletConverter:
                 )
                 key_method = KEY_METHODS.get(
                     wallet_record["settings"].get(
-                        "wallet.key_derivation_method", "KEY_DERIVATION_ARGON2I_MOD"
+                        "wallet.key_derivation_method", "ARGON2I_MOD"
                     )
                 )
                 print(

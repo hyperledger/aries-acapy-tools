@@ -174,8 +174,9 @@ class Containers:
         self,
         name: str,
         wallet_key: str,
-        admin_port: int,
+        wallet_key_derivation_method: str,
         wallet_type: str,
+        admin_port: int,
         volume_src: str,
         volume_dst: str,
         sub_wallet_src: Optional[str] = None,
@@ -198,6 +199,7 @@ class Containers:
                     --wallet-type {wallet_type}
                     --wallet-name {name}
                     --wallet-key {wallet_key}
+                    --wallet-key-derivation-method {wallet_key_derivation_method}
                     --preserve-exchange-records
                     --auto-provision
             """
@@ -239,8 +241,9 @@ class Containers:
         self,
         name: str,
         wallet_key: str,
-        admin_port: int,
+        wallet_key_derivation_method: str,
         wallet_type: str,
+        admin_port: int,
         postgres: Container,
         mwst: bool = False,
         mt: bool = False,
@@ -261,6 +264,7 @@ class Containers:
                 --wallet-type {wallet_type}
                 --wallet-name {name}
                 --wallet-key {wallet_key}
+                --wallet-key-derivation-method {wallet_key_derivation_method}
                 --wallet-storage-type postgres_storage
                 --preserve-exchange-records
                 --auto-provision

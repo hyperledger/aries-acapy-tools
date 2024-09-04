@@ -19,8 +19,9 @@ class TestTenantImport(WalletTypeToBeTested):
         admin_container = containers.acapy_postgres(
             "admin",
             "insecure",
-            3001,
+            "kdf:argon2i:mod",
             "askar",
+            3001,
             admin_postgres,
             mwst=True,
             mt=True,
@@ -28,9 +29,10 @@ class TestTenantImport(WalletTypeToBeTested):
         )
         tenant_container = containers.acapy_postgres(
             "tenant",
-            "insecure",
-            3002,
+            "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+            "RAW",
             "askar",
+            3002,
             tenant_postgres,
             mwst=False,
             mt=False,
@@ -70,7 +72,13 @@ class TestTenantImport(WalletTypeToBeTested):
             wallet_key="insecure",
             tenant_uri="postgres://postgres:mysecretpassword@localhost:5433/tenant",
             tenant_wallet_name="tenant",
-            tenant_wallet_key="insecure",
+            tenant_wallet_key="3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+            tenant_label="Tenant",
+            tenant_image_url="https://example.com/image.png",
+            tenant_extra_settings={"extra": "settings"},
+            tenant_webhook_urls=["http://example.com/webhook"],
+            tenant_dispatch_type="default",
+            tenant_wallet_key_derivation_method="RAW",
         )
 
         async with Controller("http://localhost:3001") as admin:
