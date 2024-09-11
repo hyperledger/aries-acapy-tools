@@ -16,10 +16,15 @@ class TestPgExport(WalletTypeToBeTested):
         # Prepare
         postgres = containers.postgres(5432)
         alice_container = containers.acapy_postgres(
-            "alice", "insecure", 3001, "askar", postgres
+            "alice",
+            "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+            "RAW",
+            "askar",
+            3001,
+            postgres,
         )
         bob_container = containers.acapy_postgres(
-            "bob", "insecure", 3002, "askar", postgres
+            "bob", "insecure", "kdf:argon2i:mod", "askar", 3002, postgres
         )
         containers.wait_until_healthy(alice_container)
         containers.wait_until_healthy(bob_container)
@@ -35,21 +40,33 @@ class TestPgExport(WalletTypeToBeTested):
             strategy="export",
             uri="postgres://postgres:mysecretpassword@localhost:5432/alice",
             wallet_name="alice",
+            wallet_key="3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+            wallet_key_derivation_method="RAW",
+            export_filename="wallet_export_alice.json",
+        )
+        await main(
+            strategy="export",
+            uri="postgres://postgres:mysecretpassword@localhost:5432/bob",
+            wallet_name="bob",
             wallet_key="insecure",
+            export_filename="wallet_export_bob.json",
         )
 
-        found_export_file = False
+        found_alice_export_file = False
+        found_bob_export_file = False
         for root, dirs, files in os.walk("../"):
-            if "wallet_export.json" in files:
-                found_export_file = True
-                # TODO: Delete the file
+            if "wallet_export_alice.json" in files:
+                found_alice_export_file = True
+            if "wallet_export_bob.json" in files:
+                found_bob_export_file = True
 
         containers.stop(alice_container)
         containers.stop(bob_container)
         containers.stop(postgres)
 
         # Assert: TODO: check file contents
-        assert found_export_file
+        assert found_alice_export_file
+        assert found_bob_export_file
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
@@ -58,9 +75,10 @@ class TestPgExport(WalletTypeToBeTested):
         containers.fix_permissions(alice_volume_path, user=1001, group=1001)
         alice_container = containers.acapy_sqlite(
             "alice",
-            "insecure",
-            3001,
+            "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+            "RAW",
             "askar",
+            3001,
             alice_volume_path,
             "/home/aries/.aries_cloudagent/wallet/alice",
         )
@@ -69,8 +87,9 @@ class TestPgExport(WalletTypeToBeTested):
         bob_container = containers.acapy_sqlite(
             "bob",
             "insecure",
-            3002,
+            "kdf:argon2i:mod",
             "askar",
+            3002,
             bob_volume_path,
             "/home/aries/.aries_cloudagent/wallet/bob",
         )
@@ -92,17 +111,29 @@ class TestPgExport(WalletTypeToBeTested):
             strategy="export",
             uri=f"sqlite://{alice_volume_path}/sqlite.db",
             wallet_name="alice",
+            wallet_key="3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+            wallet_key_derivation_method="RAW",
+            export_filename="wallet_export_alice.json",
+        )
+        await main(
+            strategy="export",
+            uri=f"sqlite://{bob_volume_path}/sqlite.db",
+            wallet_name="bob",
             wallet_key="insecure",
+            export_filename="wallet_export_alice.json",
         )
 
-        found_export_file = False
+        found_alice_export_file = False
+        found_bob_export_file = False
         for root, dirs, files in os.walk("../"):
-            if "wallet_export.json" in files:
-                found_export_file = True
-                # TODO: Delete the file
+            if "wallet_export_alice.json" in files:
+                found_alice_export_file = True
+            if "wallet_export_bob.json" in files:
+                found_bob_export_file = True
 
         containers.stop(alice_container)
         containers.stop(bob_container)
 
         # Assert: TODO: check file contents
-        assert found_export_file
+        assert found_alice_export_file
+        assert found_bob_export_file

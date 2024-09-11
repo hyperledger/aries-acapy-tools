@@ -10,7 +10,6 @@
 poetry install
 ```
 
-
 ### Export Wallet:
 
  * Exports a wallet into a file with a readable json format. This can be useful for debugging or for sharing wallet information with others.
@@ -22,11 +21,13 @@ poetry install
     poetry run askar-tools \
     --strategy export \
     --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
-    --base-wallet-name <base wallet name> \
-    --base-wallet-key <base wallet key>
+    --wallet-name <base wallet name> \
+    --wallet-key <base wallet key> \
+    --wallet-key-derivation-method <optional> \
+    --export-filename <optional>
     ```
 
-### Multitenant Wallet - Switch from single wallet to multi wallet:
+### Multi-tenant Wallet - Switch from single wallet to multi wallet:
 
 ##### Prerequisites:
     Backup sub-wallet. This operation will delete the sub-wallet when finished. If the wallet is broken for some reason you will not be able to recover it without a backup.
@@ -34,7 +35,7 @@ poetry install
  * Converts the profiles in the sub-wallet to individual wallets and databases.
  * After completion, the sub-wallet will be deleted and the deployment should no longer use the `--multitenancy-config '{"wallet_type": "single-wallet-askar"}'` configuration.
 
-- `export` (Output the contents of a wallet to a json file):
+- `mt-convert-to-mw` (Convert from single wallet to multi-wallet multi-tenant agent):
 
     ```
     poetry run askar-tools \ 
@@ -42,5 +43,31 @@ poetry install
     --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \ 
     --wallet-name <base wallet name> \
     --wallet-key <base wallet key> \ 
+    --wallet-key-derivation-method <optional> \
     --multitenant-sub-wallet-name <optional: custom sub wallet name>
+    ```
+
+### Import Wallet:
+
+ * Imports a wallet from a database location into a multi-tenant multi-wallet admin and database location.
+
+- `tenant-import` (Import a wallet into a multi-wallet multi-tenant agent):
+
+    ```
+    poetry run askar-tools \
+    --strategy tenant-import \
+    --uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
+    --wallet-name <base wallet name> \
+    --wallet-key <base wallet key> \
+    --wallet-key-derivation-method <optional> \
+    --tenant-uri postgres://<username>:<password>@<hostname>:<port>/<dbname> \
+    --tenant-wallet-name <tenant wallet name> \
+    --tenant-wallet-key <tenant wallet key> \
+    --tenant-wallet-key-derivation-method <optional> \
+    --tenant-wallet-type <optional: default is askar> \
+    --tenant-label <optional: default is None> \
+    --tenant-image-url <optional: default is None> \
+    --tenant-webhook-urls <optional: default is None> \
+    --tenant-extra-settings <optional: default is None> \
+    --tenant-dispatch-type <optional: default is None>
     ```

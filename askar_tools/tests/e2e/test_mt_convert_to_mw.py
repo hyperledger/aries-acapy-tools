@@ -8,7 +8,7 @@ from .cases import MtConvertToMwTestCases
 from .containers import Containers
 
 
-class TestPgMtConvertToMw(WalletTypeToBeTested):
+class TestMultitenantConvertToMultiwallet(WalletTypeToBeTested):
     @pytest.mark.asyncio
     @pytest.mark.e2e
     async def test_conversion_pg(self, containers: Containers):
@@ -18,8 +18,9 @@ class TestPgMtConvertToMw(WalletTypeToBeTested):
         admin_container = containers.acapy_postgres(
             "admin",
             "insecure",
-            3001,
+            "kdf:argon2i:mod",
             "askar",
+            3001,
             postgres,
             mwst=True,
             mt=True,
@@ -35,7 +36,8 @@ class TestPgMtConvertToMw(WalletTypeToBeTested):
                 json={
                     "label": "Alice",
                     "wallet_name": "alice",
-                    "wallet_key": "alice_insecure1",
+                    "wallet_key": "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+                    "wallet_key_derivation": "RAW",
                     "wallet_type": "askar",
                 },
                 response=CreateWalletResponse,
@@ -77,8 +79,9 @@ class TestPgMtConvertToMw(WalletTypeToBeTested):
         admin_container = containers.acapy_postgres(
             "admin",
             "insecure",
-            3001,
+            "kdf:argon2i:mod",
             "askar",
+            3001,
             postgres,
             mt=True,
             askar_profile=False,
@@ -114,8 +117,9 @@ class TestPgMtConvertToMw(WalletTypeToBeTested):
         admin_container = containers.acapy_sqlite(
             "admin",
             "insecure",
-            3001,
+            "kdf:argon2i:mod",
             "askar",
+            3001,
             admin_volume_path,
             "/home/aries/.aries_cloudagent/wallet/admin",
             sub_wallet_volume_path,
@@ -133,7 +137,8 @@ class TestPgMtConvertToMw(WalletTypeToBeTested):
                 json={
                     "label": "Alice",
                     "wallet_name": "alice",
-                    "wallet_key": "alice_insecure1",
+                    "wallet_key": "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+                    "wallet_key_derivation": "RAW",
                     "wallet_type": "askar",
                 },
                 response=CreateWalletResponse,
