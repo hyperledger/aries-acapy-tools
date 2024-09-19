@@ -64,7 +64,7 @@ class Exporter:
         store = await Store.open(
             self.conn.uri,
             pass_key=self.wallet_key,
-            key_method=KEY_METHODS[self.wallet_key_derivation_method],
+            key_method=KEY_METHODS.get(self.wallet_key_derivation_method),
         )
 
         tables["items"] = await self._get_decoded_items_and_tags(store)

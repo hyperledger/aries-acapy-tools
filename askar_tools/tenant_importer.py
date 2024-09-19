@@ -10,14 +10,11 @@ from .pg_connection import PgConnection
 from .sqlite_connection import SqliteConnection
 
 
-class TenantImporter:
-    """The Tenant Importer class."""
+class TenantImportObject:
+    """The Tenant Import Object class."""
 
     def __init__(
         self,
-        admin_conn: SqliteConnection | PgConnection,
-        admin_wallet_name: str,
-        admin_wallet_key: str,
         tenant_conn: SqliteConnection | PgConnection,
         tenant_wallet_name: str,
         tenant_wallet_key: str,
@@ -27,32 +24,8 @@ class TenantImporter:
         tenant_webhook_urls: list = None,
         tenant_extra_settings: dict = None,
         tenant_dispatch_type: str = "default",
-        admin_wallet_key_derivation_method: str = "ARGON2I_MOD",
         tenant_wallet_key_derivation_method: str = "ARGON2I_MOD",
     ):
-        """Initialize the Tenant Importer object.
-
-        Args:
-            admin_conn: The admin connection object.
-            admin_wallet_name: The name of the admin wallet.
-            admin_wallet_key: The key for the admin wallet.
-            tenant_conn: The tenant connection object.
-            tenant_wallet_name: The name of the tenant wallet.
-            tenant_wallet_key: The key for the tenant wallet.
-            tenant_wallet_type: The type of the tenant wallet.
-            tenant_label: The label for the tenant wallet.
-            tenant_image_url: The image URL for the tenant wallet.
-            tenant_webhook_urls: The webhook URLs for the tenant wallet.
-            tenant_extra_settings: Extra settings for the tenant wallet.
-            tenant_dispatch_type: The dispatch type for the tenant wallet.
-            admin_wallet_key_derivation_method: The key derivation method for the admin
-                wallet.
-            tenant_wallet_key_derivation_method: The key derivation method for the tenant
-                wallet.
-        """
-        self.admin_conn = admin_conn
-        self.admin_wallet_name = admin_wallet_name
-        self.admin_wallet_key = admin_wallet_key
         self.tenant_conn = tenant_conn
         self.tenant_wallet_name = tenant_wallet_name
         self.tenant_wallet_key = tenant_wallet_key
@@ -62,48 +35,83 @@ class TenantImporter:
         self.tenant_webhook_urls = tenant_webhook_urls
         self.tenant_extra_settings = tenant_extra_settings
         self.tenant_dispatch_type = tenant_dispatch_type
-        self.admin_wallet_key_derivation_method = admin_wallet_key_derivation_method
         self.tenant_wallet_key_derivation_method = tenant_wallet_key_derivation_method
+
+
+class TenantImporter:
+    """The Tenant Importer class."""
+
+    def __init__(
+        self,
+        admin_conn: SqliteConnection | PgConnection,
+        admin_wallet_name: str,
+        admin_wallet_key: str,
+        admin_wallet_key_derivation_method: str,
+        tenant_import_object: TenantImportObject,
+    ):
+        """Initialize the Tenant Importer object.
+
+        Args:
+            admin_conn: The admin connection object.
+            admin_wallet_name: The name of the admin wallet.
+            admin_wallet_key: The key for the admin wallet.
+            admin_wallet_key_derivation_method: The key derivation method for the
+                admin wallet.
+            tenant_import_object: The tenant import object.
+        """
+        self.admin_conn = admin_conn
+        self.admin_wallet_name = admin_wallet_name
+        self.admin_wallet_key = admin_wallet_key
+        self.admin_wallet_key_derivation_method = admin_wallet_key_derivation_method
+        self.tenant_import_obj = tenant_import_object
 
     async def _create_tenant(self, wallet_id: str, admin_txn, current_time: str):
         # Create wallet record in admin wallet
 
         value_json = {
-            "wallet_name": self.tenant_wallet_name,
+            "wallet_name": self.tenant_import_obj.tenant_wallet_name,
             "created_at": current_time,
             "updated_at": current_time,
             "settings": {
-                "wallet.type": self.tenant_wallet_type,
-                "wallet.name": self.tenant_wallet_name,
-                "wallet.key": self.tenant_wallet_key,
+                "wallet.type": self.tenant_import_obj.tenant_wallet_type,
+                "wallet.name": self.tenant_import_obj.tenant_wallet_name,
+                "wallet.key": self.tenant_import_obj.tenant_wallet_key,
                 "wallet.id": wallet_id,
-                "wallet.key_derivation_method": KEY_METHODS[
-                    self.tenant_wallet_key_derivation_method
-                ],
-                "wallet.dispatch_type": self.tenant_dispatch_type,
             },
             "key_management_mode": "managed",
             "jwt_iat": current_time,
         }
 
-        if self.tenant_label:
-            value_json["settings"]["default_label"] = self.tenant_label
+        if self.tenant_import_obj.tenant_dispatch_type:
+            value_json["settings"]["wallet.dispatch_type"] = (
+                self.tenant_import_obj.tenant_dispatch_type
+            )
 
-        if self.tenant_image_url:
-            value_json["settings"]["image_url"] = self.tenant_image_url
+        if self.tenant_import_obj.tenant_wallet_key_derivation_method:
+            value_json["settings"]["wallet.key_derivation_method"] = KEY_METHODS[
+                self.tenant_import_obj.tenant_wallet_key_derivation_method
+            ]
 
-        if self.tenant_extra_settings:
-            value_json["settings"].update(self.tenant_extra_settings)
+        if self.tenant_import_obj.tenant_label:
+            value_json["settings"]["default_label"] = self.tenant_import_obj.tenant_label
 
-        if self.tenant_webhook_urls:
-            value_json["settings"]["wallet.webhook_urls"] = self.tenant_webhook_urls
+        if self.tenant_import_obj.tenant_image_url:
+            value_json["settings"]["image_url"] = self.tenant_import_obj.tenant_image_url
+
+        if self.tenant_import_obj.tenant_extra_settings:
+            value_json["settings"].update(self.tenant_import_obj.tenant_extra_settings)
+
+        if self.tenant_import_obj.tenant_webhook_urls:
+            value_json["settings"]["wallet.webhook_urls"] = (
+                self.tenant_import_obj.tenant_webhook_urls
+            )
 
         await admin_txn.insert(
             category="wallet_record",
             name=wallet_id,
             value_json=value_json,
             tags={
-                "wallet_name": self.tenant_wallet_name,
+                "wallet_name": self.tenant_import_obj.tenant_wallet_name,
             },
         )
 
@@ -177,48 +185,63 @@ class TenantImporter:
         print("Importing tenant wallet into admin wallet")
 
         # Make wallet/db in admin location for tenant
-        await self.admin_conn.create_database(
-            admin_wallet_name=self.admin_wallet_name,
-            sub_wallet_name=self.tenant_wallet_name,
-        )
-        # Copy the tenant wallet to the admin wallet location
-        tenant_wallet = await Store.open(
-            uri=self.tenant_conn.uri,
-            pass_key=self.tenant_wallet_key,
-            key_method=KEY_METHODS[self.tenant_wallet_key_derivation_method],
-        )
-        await tenant_wallet.copy_to(
-            target_uri=self.admin_conn.uri.replace(
-                self.admin_wallet_name, self.tenant_wallet_name
-            ),
-            pass_key=self.tenant_wallet_key,
-            key_method=KEY_METHODS[self.tenant_wallet_key_derivation_method],
-        )
-
-        # Import the tenant wallet into the admin wallet
-        admin_store = await Store.open(
-            uri=self.admin_conn.uri,
-            pass_key=self.admin_wallet_key,
-            key_method=KEY_METHODS[self.admin_wallet_key_derivation_method],
-        )
-        async with admin_store.transaction() as admin_txn:
-            wallet_id = str(uuid.uuid4())
-            current_time = time.time()
-            await self._create_tenant(
-                wallet_id=wallet_id,
-                admin_txn=admin_txn,
-                current_time=current_time,
+        success = True
+        try:
+            await self.admin_conn.create_database(
+                admin_wallet_name=self.admin_wallet_name,
+                sub_wallet_name=self.tenant_import_obj.tenant_wallet_name,
             )
-            await self._create_forward_routes(
-                tenant_wallet=tenant_wallet,
-                admin_txn=admin_txn,
-                wallet_id=wallet_id,
-                current_time=current_time,
+            # Copy the tenant wallet to the admin wallet location
+            tenant_wallet = await Store.open(
+                uri=self.tenant_import_obj.tenant_conn.uri,
+                pass_key=self.tenant_import_obj.tenant_wallet_key,
+                key_method=KEY_METHODS.get(
+                    self.tenant_import_obj.tenant_wallet_key_derivation_method
+                ),
             )
-            await admin_txn.commit()
+            await tenant_wallet.copy_to(
+                target_uri=self.admin_conn.uri.replace(
+                    self.admin_wallet_name, self.tenant_import_obj.tenant_wallet_name
+                ),
+                pass_key=self.tenant_import_obj.tenant_wallet_key,
+                key_method=KEY_METHODS.get(
+                    self.tenant_import_obj.tenant_wallet_key_derivation_method
+                ),
+            )
 
+            # Import the tenant wallet into the admin wallet
+            admin_store = await Store.open(
+                uri=self.admin_conn.uri,
+                pass_key=self.admin_wallet_key,
+                key_method=KEY_METHODS.get(self.admin_wallet_key_derivation_method),
+            )
+            async with admin_store.transaction() as admin_txn:
+                wallet_id = str(uuid.uuid4())
+                current_time = time.time()
+                await self._create_tenant(
+                    wallet_id=wallet_id,
+                    admin_txn=admin_txn,
+                    current_time=str(current_time),
+                )
+                await self._create_forward_routes(
+                    tenant_wallet=tenant_wallet,
+                    admin_txn=admin_txn,
+                    wallet_id=wallet_id,
+                    current_time=str(current_time),
+                )
+                await admin_txn.commit()
+        except Exception as e:
+            success = False
+            print(f"Error importing tenant wallet: {e}")
+            await self.admin_conn.remove_database(
+                self.admin_wallet_name, self.tenant_import_obj.tenant_wallet_name
+            )
+
+        if success:
+            await tenant_wallet.close()
+            print("Tenant wallet imported successfully")
+        await self.tenant_import_obj.tenant_conn.close()
         await self.admin_conn.close()
-        await self.tenant_conn.close()
 
     async def run(self):
         """Run the importer."""

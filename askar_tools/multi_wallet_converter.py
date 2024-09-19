@@ -133,7 +133,7 @@ class MultiWalletConverter:
                     {wallet_record["settings"]["wallet.name"]}. The sub wallet 
                     {self.sub_wallet_name} will not be deleted. Try running again."""
                 )
-                await self.conn.remove_wallet(
+                await self.conn.remove_database(
                     self.admin_wallet_name, wallet_record["settings"]["wallet.name"]
                 )
                 success = False
@@ -141,7 +141,7 @@ class MultiWalletConverter:
         if success:
             print(f"Deleting sub wallet {self.sub_wallet_name}...")
             await sub_wallet_store.close()
-            await self.conn.remove_wallet(self.admin_wallet_name, self.sub_wallet_name)
+            await self.conn.remove_database(self.admin_wallet_name, self.sub_wallet_name)
 
         await admin_store.close()
         await self.conn.close()

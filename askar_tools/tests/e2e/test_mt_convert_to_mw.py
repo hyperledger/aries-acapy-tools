@@ -1,3 +1,5 @@
+from argparse import Namespace
+
 import pytest
 from acapy_controller import Controller
 from acapy_controller.models import CreateWalletResponse
@@ -68,12 +70,18 @@ class TestMultitenantConvertToMultiwallet(WalletTypeToBeTested):
         containers.stop(admin_container)
 
         # Action the conversion
-        await main(
-            strategy="mt-convert-to-mw",
-            uri="postgres://postgres:mysecretpassword@localhost:5432/admin",
-            wallet_name="admin",
-            wallet_key="insecure",
+        namespace = Namespace()
+        namespace.__dict__.update(
+            {
+                "strategy": "mt-convert-to-mw",
+                "uri": "postgres://postgres:mysecretpassword@localhost:5432/admin",
+                "wallet_key_derivation_method": "ARGON2I_MOD",
+                "wallet_name": "admin",
+                "wallet_key": "insecure",
+                "multitenant_sub_wallet_name": "multitenant_sub_wallet",
+            }
         )
+        await main(namespace)
 
         # Start a new admin container that expects multiple wallet for each sub wallet
         admin_container = containers.acapy_postgres(
@@ -169,9 +177,15 @@ class TestMultitenantConvertToMultiwallet(WalletTypeToBeTested):
         containers.fix_permissions(sub_wallet_volume_path)
 
         # Action the conversion
-        await main(
-            strategy="mt-convert-to-mw",
-            uri=f"sqlite://{admin_volume_path}/sqlite.db",
-            wallet_name="admin",
-            wallet_key="insecure",
+        namespace = Namespace()
+        namespace.__dict__.update(
+            {
+                "strategy": "mt-convert-to-mw",
+                "uri": f"sqlite://{admin_volume_path}/sqlite.db",
+                "wallet_key_derivation_method": "ARGON2I_MOD",
+                "wallet_name": "admin",
+                "wallet_key": "insecure",
+                "multitenant_sub_wallet_name": "multitenant_sub_wallet",
+            }
         )
+        await main(namespace)

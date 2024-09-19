@@ -1,6 +1,7 @@
 import os
 import shutil
 import sqlite3
+from typing import Optional
 from urllib.parse import urlparse
 
 import aiosqlite
@@ -82,13 +83,20 @@ class SqliteConnection(DbConnection):
             if conn:
                 conn.close()
 
-    async def remove_wallet(self, admin_wallet_name, sub_wallet_name):
+    async def remove_database(
+        self,
+        admin_wallet_name: Optional[str] = None,
+        sub_wallet_name="multitenant_subwallet",
+    ):
         """Remove the sqlite wallet."""
-        directory = (
-            urlparse(self.uri)
-            .path.replace("/sqlite.db", "")
-            .replace(admin_wallet_name, sub_wallet_name)
-        )
+        if admin_wallet_name is not None:
+            directory = (
+                urlparse(self.uri)
+                .path.replace("/sqlite.db", "")
+                .replace(admin_wallet_name, sub_wallet_name)
+            )
+        else:
+            directory = urlparse(self.uri).path.replace("/sqlite.db", "")
         try:
             shutil.rmtree(directory)
             print(f"Successfully deleted {directory}")

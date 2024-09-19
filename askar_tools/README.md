@@ -49,8 +49,9 @@ poetry install
 
 ### Import Wallet:
 
- * Imports a wallet from a database location into a multi-tenant multi-wallet admin and database location.
-
+- Imports a wallet from a database location into a multi-tenant multi-wallet admin and database location.
+- **Important:** Existing connections to the imported agent won't work without a proxy server routing the requests to the correct agent. This is because any external agents will still only know the old endpoint.
+- The database will not be deleted from the source location.
 - `tenant-import` (Import a wallet into a multi-wallet multi-tenant agent):
 
     ```
