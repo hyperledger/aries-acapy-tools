@@ -1,4 +1,5 @@
 import os
+from argparse import Namespace
 
 import pytest
 from acapy_controller import Controller
@@ -36,21 +37,31 @@ class TestPgExport(WalletTypeToBeTested):
             await test_cases.pre(alice, bob)
 
         # Action
-        await main(
-            strategy="export",
-            uri="postgres://postgres:mysecretpassword@localhost:5432/alice",
-            wallet_name="alice",
-            wallet_key="3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
-            wallet_key_derivation_method="RAW",
-            export_filename="wallet_export_alice.json",
+        namespace = Namespace()
+        namespace.__dict__.update(
+            {
+                "strategy": "export",
+                "uri": "postgres://postgres:mysecretpassword@localhost:5432/alice",
+                "wallet_name": "alice",
+                "wallet_key": "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+                "wallet_key_derivation_method": "RAW",
+                "export_filename": "wallet_export_alice.json",
+            }
         )
-        await main(
-            strategy="export",
-            uri="postgres://postgres:mysecretpassword@localhost:5432/bob",
-            wallet_name="bob",
-            wallet_key="insecure",
-            export_filename="wallet_export_bob.json",
+        await main(namespace)
+
+        namespace = Namespace()
+        namespace.__dict__.update(
+            {
+                "strategy": "export",
+                "uri": "postgres://postgres:mysecretpassword@localhost:5432/bob",
+                "wallet_name": "bob",
+                "wallet_key": "insecure",
+                "wallet_key_derivation_method": "ARGON2I_MOD",
+                "export_filename": "wallet_export_bob.json",
+            }
         )
+        await main(namespace)
 
         found_alice_export_file = False
         found_bob_export_file = False
@@ -106,22 +117,33 @@ class TestPgExport(WalletTypeToBeTested):
         containers.fix_permissions(alice_volume_path)
         containers.fix_permissions(bob_volume_path)
 
+        namespace = Namespace()
+        namespace.__dict__.update(
+            {
+                "strategy": "export",
+                "uri": f"sqlite://{alice_volume_path}/sqlite.db",
+                "wallet_name": "alice",
+                "wallet_key": "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+                "wallet_key_derivation_method": "RAW",
+                "export_filename": "wallet_export_alice.json",
+            }
+        )
         # Action
-        await main(
-            strategy="export",
-            uri=f"sqlite://{alice_volume_path}/sqlite.db",
-            wallet_name="alice",
-            wallet_key="3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
-            wallet_key_derivation_method="RAW",
-            export_filename="wallet_export_alice.json",
+        await main(namespace)
+
+        namespace = Namespace()
+        namespace.__dict__.update(
+            {
+                "strategy": "export",
+                "uri": f"sqlite://{bob_volume_path}/sqlite.db",
+                "wallet_name": "bob",
+                "wallet_key": "insecure",
+                "wallet_key_derivation_method": "ARGON2I_MOD",
+                "export_filename": "wallet_export_bob.json",
+            }
         )
-        await main(
-            strategy="export",
-            uri=f"sqlite://{bob_volume_path}/sqlite.db",
-            wallet_name="bob",
-            wallet_key="insecure",
-            export_filename="wallet_export_alice.json",
-        )
+
+        await main(namespace)
 
         found_alice_export_file = False
         found_bob_export_file = False

@@ -31,5 +31,5 @@ class DbConnection(ABC):
         """Create a database."""
 
     @abstractmethod
-    async def remove_wallet(self, admin_wallet_name, sub_wallet_name):
-        """Remove the wallet."""
+    async def remove_database(self, admin_wallet_name, sub_wallet_name):
+        """Remove the database."""

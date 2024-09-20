@@ -4,14 +4,14 @@ import argparse
 import asyncio
 import logging
 import sys
-from typing import Optional
 from urllib.parse import urlparse
 
-from .exporter import Exporter
-from .multi_wallet_converter import MultiWalletConverter
-from .pg_connection import PgConnection
-from .sqlite_connection import SqliteConnection
-from .tenant_importer import TenantImporter
+from askar_tools.error import InvalidArgumentsError
+from askar_tools.exporter import Exporter
+from askar_tools.multi_wallet_converter import MultiWalletConverter
+from askar_tools.pg_connection import PgConnection
+from askar_tools.sqlite_connection import SqliteConnection
+from askar_tools.tenant_importer import TenantImporter, TenantImportObject
 
 
 def config():
@@ -57,6 +57,7 @@ def config():
         "--wallet-key-derivation-method",
         type=str,
         help=("Specify key derivation method for the wallet. Default is 'ARGON2I_MOD'."),
+        default="ARGON2I_MOD",
     )
 
     # Export
@@ -101,6 +102,7 @@ def config():
         help=(
             "Specify key derivation method for the tenant wallet. Default is 'ARGON2I_MOD'."
         ),
+        default="ARGON2I_MOD",
     )
     parser.add_argument(
         "--tenant-wallet-type",
@@ -109,6 +111,7 @@ def config():
             """Specify the wallet type of the tenant wallet. Either 'askar' 
               or 'askar-anoncreds'. Default is 'askar'."""
         ),
+        default="askar",
     )
     parser.add_argument(
         "--tenant-label",
@@ -134,80 +137,61 @@ def config():
         "--tenant-dispatch-type",
         type=str,
         help=("Specify the dispatch type for the tenant wallet."),
+        default="base",
     )
 
     args, _ = parser.parse_known_args(sys.argv[1:])
 
-    if args.strategy == "tenant-import":
-        if (
-            not args.tenant_uri
-            or not args.tenant_wallet_name
-            or not args.tenant_wallet_key
-        ):
-            parser.error(
-                """For tenant-import strategy, tenant-uri, tenant-wallet-name, and 
-                tenant-wallet-key are required."""
-            )
+    if args.strategy == "tenant-import" and (
+        not args.tenant_uri or not args.tenant_wallet_name or not args.tenant_wallet_key
+    ):
+        parser.error(
+            """For tenant-import strategy, tenant-uri, tenant-wallet-name, and 
+            tenant-wallet-key are required."""
+        )
 
     return args
 
 
-async def main(
-    strategy: str,
-    uri: str,
-    wallet_name: Optional[str] = None,
-    wallet_key: Optional[str] = None,
-    wallet_key_derivation_method: Optional[str] = "ARGON2I_MOD",
-    multitenant_sub_wallet_name: Optional[str] = "multitenant_sub_wallet",
-    tenant_uri: Optional[str] = None,
-    tenant_wallet_name: Optional[str] = None,
-    tenant_wallet_key: Optional[str] = None,
-    tenant_wallet_type: Optional[str] = "askar",
-    tenant_wallet_key_derivation_method: Optional[str] = "ARGON2I_MOD",
-    tenant_label: Optional[str] = None,
-    tenant_image_url: Optional[str] = None,
-    tenant_webhook_urls: Optional[list] = None,
-    tenant_extra_settings: Optional[dict] = None,
-    tenant_dispatch_type: Optional[str] = "default",
-    export_filename: Optional[str] = "wallet_export.json",
-):
+async def main(args):
     """Run the main function."""
     logging.basicConfig(level=logging.WARN)
-    parsed = urlparse(uri)
+    parsed = urlparse(args.uri)
 
     # Connection setup
     if parsed.scheme == "sqlite":
-        conn = SqliteConnection(uri)
+        conn = SqliteConnection(args.uri)
     elif parsed.scheme == "postgres":
-        conn = PgConnection(uri)
+        conn = PgConnection(args.uri)
     else:
         raise ValueError("Unexpected DB URI scheme")
 
     # Strategy setup
-    if strategy == "export":
+    if args.strategy == "export":
+        print(args)
         await conn.connect()
         method = Exporter(
             conn=conn,
-            wallet_name=wallet_name,
-            wallet_key=wallet_key,
-            wallet_key_derivation_method=wallet_key_derivation_method,
-            export_filename=export_filename,
+            wallet_name=args.wallet_name,
+            wallet_key=args.wallet_key,
+            wallet_key_derivation_method=args.wallet_key_derivation_method,
+            export_filename=args.export_filename,
         )
-    elif strategy == "mt-convert-to-mw":
+    elif args.strategy == "mt-convert-to-mw":
         await conn.connect()
         method = MultiWalletConverter(
             conn=conn,
-            wallet_name=wallet_name,
-            wallet_key=wallet_key,
-            wallet_key_derivation_method=wallet_key_derivation_method,
-            sub_wallet_name=multitenant_sub_wallet_name,
+            wallet_name=args.wallet_name,
+            wallet_key=args.wallet_key,
+            wallet_key_derivation_method=args.wallet_key_derivation_method,
+            sub_wallet_name=args.multitenant_sub_wallet_name,
         )
-    elif strategy == "tenant-import":
-        tenant_parsed = urlparse(tenant_uri)
+    elif args.strategy == "tenant-import":
+        tenant_parsed = urlparse(args.tenant_uri)
         if tenant_parsed.scheme == "sqlite":
-            tenant_conn = SqliteConnection(tenant_uri)
+            tenant_conn = SqliteConnection(args.tenant_uri)
         elif tenant_parsed.scheme == "postgres":
-            tenant_conn = PgConnection(tenant_uri)
+            tenant_conn = PgConnection(args.tenant_uri)
         else:
             raise ValueError("Unexpected tenant DB URI scheme")
 
@@ -215,22 +199,24 @@ async def main(
         await tenant_conn.connect()
         method = TenantImporter(
             admin_conn=conn,
-            admin_wallet_name=wallet_name,
-            admin_wallet_key=wallet_key,
-            admin_wallet_key_derivation_method=wallet_key_derivation_method,
-            tenant_conn=tenant_conn,
-            tenant_wallet_name=tenant_wallet_name,
-            tenant_wallet_key=tenant_wallet_key,
-            tenant_wallet_type=tenant_wallet_type,
-            tenant_wallet_key_derivation_method=tenant_wallet_key_derivation_method,
-            tenant_label=tenant_label,
-            tenant_image_url=tenant_image_url,
-            tenant_webhook_urls=tenant_webhook_urls,
-            tenant_extra_settings=tenant_extra_settings,
-            tenant_dispatch_type=tenant_dispatch_type,
+            admin_wallet_name=args.wallet_name,
+            admin_wallet_key=args.wallet_key,
+            admin_wallet_key_derivation_method=args.wallet_key_derivation_method,
+            tenant_import_object=TenantImportObject(
+                tenant_conn=tenant_conn,
+                tenant_wallet_name=args.tenant_wallet_name,
+                tenant_wallet_key=args.tenant_wallet_key,
+                tenant_wallet_type=args.tenant_wallet_type,
+                tenant_wallet_key_derivation_method=args.tenant_wallet_key_derivation_method,
+                tenant_label=args.tenant_label,
+                tenant_image_url=args.tenant_image_url,
+                tenant_webhook_urls=args.tenant_webhook_urls,
+                tenant_extra_settings=args.tenant_extra_settings,
+                tenant_dispatch_type=args.tenant_dispatch_type,
+            ),
         )
     else:
-        raise Exception("Invalid strategy")
+        raise InvalidArgumentsError("Invalid strategy")
 
     await method.run()
 
@@ -238,7 +224,7 @@ async def main(
 def entrypoint():
     """Entrypoint for the CLI."""
     args = config()
-    asyncio.run(main(**vars(args)))
+    asyncio.run(main(args))
 
 
 if __name__ == "__main__":

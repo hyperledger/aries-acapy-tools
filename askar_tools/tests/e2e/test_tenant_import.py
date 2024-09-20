@@ -1,3 +1,5 @@
+from argparse import Namespace
+
 import pytest
 from acapy_controller import Controller
 from acapy_controller.models import CreateWalletResponse
@@ -65,21 +67,27 @@ class TestTenantImport(WalletTypeToBeTested):
                 await test_cases.pre(alice, tenant)
 
         # Action the import
-        await main(
-            strategy="tenant-import",
-            uri="postgres://postgres:mysecretpassword@localhost:5432/admin",
-            wallet_name="admin",
-            wallet_key="insecure",
-            tenant_uri="postgres://postgres:mysecretpassword@localhost:5433/tenant",
-            tenant_wallet_name="tenant",
-            tenant_wallet_key="3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
-            tenant_label="Tenant",
-            tenant_image_url="https://example.com/image.png",
-            tenant_extra_settings={"extra": "settings"},
-            tenant_webhook_urls=["http://example.com/webhook"],
-            tenant_dispatch_type="default",
-            tenant_wallet_key_derivation_method="RAW",
+        namespace = Namespace()
+        namespace.__dict__.update(
+            {
+                "strategy": "tenant-import",
+                "uri": "postgres://postgres:mysecretpassword@localhost:5432/admin",
+                "wallet_name": "admin",
+                "wallet_key": "insecure",
+                "wallet_key_derivation_method": "ARGON2I_MOD",
+                "tenant_uri": "postgres://postgres:mysecretpassword@localhost:5433/tenant",
+                "tenant_wallet_name": "tenant",
+                "tenant_wallet_key": "3cAZj1hPvUhKeBkzCKPTHhTxRRmYv5abDbjmaYwtk6Nf",
+                "tenant_wallet_type": "askar",
+                "tenant_label": "Tenant",
+                "tenant_image_url": "https://example.com/image.png",
+                "tenant_extra_settings": {"extra": "settings"},
+                "tenant_webhook_urls": ["http://example.com/webhook"],
+                "tenant_dispatch_type": "default",
+                "tenant_wallet_key_derivation_method": "RAW",
+            }
         )
+        await main(namespace)
 
         async with Controller("http://localhost:3001") as admin:
             # Get the tenant wallet id and token
