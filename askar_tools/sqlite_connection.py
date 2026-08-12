@@ -83,6 +83,15 @@ class SqliteConnection(DbConnection):
             if conn:
                 conn.close()
 
+    async def database_exists(self, admin_wallet_name, sub_wallet_name) -> bool:
+        """Check whether an sqlite database exists."""
+        directory = (
+            urlparse(self.uri)
+            .path.replace("/sqlite.db", "")
+            .replace(admin_wallet_name, sub_wallet_name)
+        )
+        return os.path.exists(os.path.join(directory, "sqlite.db"))
+
     async def remove_database(
         self,
         admin_wallet_name: Optional[str] = None,

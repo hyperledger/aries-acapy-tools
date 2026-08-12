@@ -94,12 +94,21 @@ class PgConnection(DbConnection):
             """
         )
 
+    async def database_exists(self, admin_wallet_name, sub_wallet_name) -> bool:
+        """Check whether a postgres database exists."""
+        found = await self._conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1);",
+            sub_wallet_name,
+        )
+        return bool(found)
+
     async def remove_database(self, admin_wallet_name, sub_wallet_name):
         """Remove the postgres wallet."""
         # Kill any connections to the database
         await self._conn.execute(
             f"""
-            SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{sub_wallet_name}';
+            SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+            WHERE datname = '{sub_wallet_name}';
             """
         )
         # Drop the database

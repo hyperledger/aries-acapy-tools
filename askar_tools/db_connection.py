@@ -31,5 +31,9 @@ class DbConnection(ABC):
         """Create a database."""
 
     @abstractmethod
+    async def database_exists(self, admin_wallet_name, sub_wallet_name) -> bool:
+        """Check whether a database exists."""
+
+    @abstractmethod
     async def remove_database(self, admin_wallet_name, sub_wallet_name):
         """Remove the database."""
