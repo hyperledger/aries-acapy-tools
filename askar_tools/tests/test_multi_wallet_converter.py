@@ -116,6 +116,20 @@ async def test_existing_unverified_tenant_is_dropped_and_redone():
 
 
 @pytest.mark.asyncio
+async def test_final_sub_wallet_drop_failure_exits_nonzero():
+    converter, conn, admin_store, sub_wallet_store = make_converter(
+        [wallet_entry("alice")]
+    )
+    conn.remove_database = mock.AsyncMock(side_effect=RuntimeError("still connected"))
+    converter.convert_tenant_wallet = mock.AsyncMock()
+    converter.verify_tenant_wallet = mock.AsyncMock(return_value=(True, ""))
+
+    with patch_store_open(admin_store, sub_wallet_store):
+        with pytest.raises(ConversionError, match="could not be deleted"):
+            await converter.convert_single_wallet_to_multi_wallet()
+
+
+@pytest.mark.asyncio
 async def test_copy_failure_cleans_partial_target_and_keeps_sub_wallet():
     converter, conn, admin_store, sub_wallet_store = make_converter(
         [wallet_entry("alice")]

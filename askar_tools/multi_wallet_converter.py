@@ -315,13 +315,18 @@ class MultiWalletConverter:
                 )
 
             failed = [result for result in results if result["outcome"] == "failed"]
+            drop_error = None
             if total > 0 and not failed:
-                self.log(f"Deleting sub wallet {self.sub_wallet_name}...")
-                await self.sub_wallet_store.close()
-                await self.conn.remove_database(
-                    self.admin_wallet_name, self.sub_wallet_name
-                )
-                sub_wallet_dropped = True
+                try:
+                    self.log(f"Deleting sub wallet {self.sub_wallet_name}...")
+                    await self.sub_wallet_store.close()
+                    await self.conn.remove_database(
+                        self.admin_wallet_name, self.sub_wallet_name
+                    )
+                    sub_wallet_dropped = True
+                except Exception as e:
+                    drop_error = e
+                    self.log(f"Failed to delete sub wallet {self.sub_wallet_name}: {e}")
 
             summary = {
                 "total": total,
@@ -352,6 +357,11 @@ class MultiWalletConverter:
                 f"{len(failed)} of {total} tenant wallets failed conversion; the "
                 f"sub wallet {self.sub_wallet_name} was not deleted. Run again to "
                 f"resume — completed tenants will be verified and skipped."
+            )
+        if not sub_wallet_dropped:
+            raise ConversionError(
+                f"All tenant wallets verified but the sub wallet "
+                f"{self.sub_wallet_name} could not be deleted: {drop_error}"
             )
 
     async def run(self):
