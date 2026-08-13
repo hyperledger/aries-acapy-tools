@@ -33,6 +33,9 @@ poetry install
     Backup sub-wallet. This operation will delete the sub-wallet when finished. If the wallet is broken for some reason you will not be able to recover it without a backup.
 
  * Converts the profiles in the sub-wallet to individual wallets and databases.
+ * Each converted wallet is verified against its sub-wallet profile (expected single profile, record counts per category, and key counts) before it is counted as done.
+ * The sub-wallet is only deleted when every tenant wallet has been converted and verified. If any tenant fails, the sub-wallet is kept and the process exits non-zero. A per-tenant summary (converted / skipped / redone / failed, timings, and whether the sub-wallet was deleted) is printed at the end of every run.
+ * The operation is safe to re-run after a failure: tenant databases that already exist and verify are skipped, and a tenant database that exists but fails verification (for example a partial copy from an interrupted run) is dropped and converted again. Completed tenants are never re-copied and never destroyed by a re-run.
  * After completion, the sub-wallet will be deleted and the deployment should no longer use the `--multitenancy-config '{"wallet_type": "single-wallet-askar"}'` configuration.
 
 - `mt-convert-to-mw` (Convert from single wallet to multi-wallet multi-tenant agent):
