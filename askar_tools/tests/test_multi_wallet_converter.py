@@ -81,7 +81,8 @@ async def test_existing_verified_tenant_is_skipped():
     converter, conn, admin_store, sub_wallet_store = make_converter(
         [wallet_entry("alice")]
     )
-    conn.database_exists = mock.AsyncMock(return_value=True)
+    # Tenant database exists; sub wallet gone after the final delete
+    conn.database_exists = mock.AsyncMock(side_effect=[True, False])
     converter.convert_tenant_wallet = mock.AsyncMock()
     converter.verify_tenant_wallet = mock.AsyncMock(return_value=(True, ""))
 
@@ -99,7 +100,8 @@ async def test_existing_unverified_tenant_is_dropped_and_redone():
     converter, conn, admin_store, sub_wallet_store = make_converter(
         [wallet_entry("alice")]
     )
-    conn.database_exists = mock.AsyncMock(return_value=True)
+    # Tenant database exists; sub wallet gone after the final delete
+    conn.database_exists = mock.AsyncMock(side_effect=[True, False])
     converter.convert_tenant_wallet = mock.AsyncMock()
     converter.verify_tenant_wallet = mock.AsyncMock(
         side_effect=[(False, "record counts differ"), (True, "")]
@@ -195,3 +197,130 @@ async def test_no_wallet_records_raises_and_keeps_sub_wallet():
             await converter.convert_single_wallet_to_multi_wallet()
 
     conn.remove_database.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_silently_failed_sub_wallet_delete_exits_nonzero():
+    converter, conn, admin_store, sub_wallet_store = make_converter(
+        [wallet_entry("alice")]
+    )
+    # Tenant database absent; sub wallet still present after remove_database
+    # returned without raising (e.g. an implementation that swallows errors)
+    conn.database_exists = mock.AsyncMock(side_effect=[False, True])
+    converter.convert_tenant_wallet = mock.AsyncMock()
+    converter.verify_tenant_wallet = mock.AsyncMock(return_value=(True, ""))
+
+    with patch_store_open(admin_store, sub_wallet_store):
+        with pytest.raises(ConversionError, match="could not be deleted"):
+            await converter.convert_single_wallet_to_multi_wallet()
+
+
+class FakeScan:
+    """Async iterator over prepared entries, like an askar Scan."""
+
+    def __init__(self, entries):
+        self._entries = list(entries)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self._entries:
+            raise StopAsyncIteration
+        return self._entries.pop(0)
+
+
+class FakeSession:
+    """Async-context session returning prepared key entries."""
+
+    def __init__(self, keys):
+        self._keys = keys
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def fetch_all_keys(self):
+        return self._keys
+
+
+class FakeStore:
+    """Minimal stand-in for an askar Store used by verify_tenant_wallet."""
+
+    def __init__(self, profiles, categories=(), keys=0):
+        self.profiles = list(profiles)
+        self.categories = list(categories)
+        self.keys = keys
+        self.closed = False
+
+    async def list_profiles(self):
+        return self.profiles
+
+    def scan(self, profile=None, **_):
+        return FakeScan(SimpleNamespace(category=c) for c in self.categories)
+
+    def session(self, profile=None):
+        return FakeSession([object()] * self.keys)
+
+    async def close(self):
+        self.closed = True
+
+
+async def run_verify(source, target):
+    """Run verify_tenant_wallet for tenant 'alice' against fake stores."""
+    converter, conn, admin_store, sub_wallet_store = make_converter([])
+    converter.sub_wallet_store = source
+    with mock.patch(
+        "askar_tools.multi_wallet_converter.Store.open",
+        mock.AsyncMock(return_value=target),
+    ):
+        return await converter.verify_tenant_wallet(wallet_entry("alice").value_json)
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_matching_target():
+    source = FakeStore(["unused"], ["cat_a", "cat_a", "cat_b"], keys=2)
+    target = FakeStore(["alice-id"], ["cat_b", "cat_a", "cat_a"], keys=2)
+
+    verified, reason = await run_verify(source, target)
+
+    assert verified, reason
+    assert target.closed
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_extra_profile():
+    source = FakeStore(["unused"], ["cat_a"], keys=0)
+    target = FakeStore(["alice-id", "stray-profile"], ["cat_a"], keys=0)
+
+    verified, reason = await run_verify(source, target)
+
+    assert not verified
+    assert "profile" in reason
+    assert target.closed
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_category_count_mismatch():
+    source = FakeStore(["unused"], ["cat_a", "cat_a", "cat_b"], keys=0)
+    target = FakeStore(["alice-id"], ["cat_a", "cat_b"], keys=0)
+
+    verified, reason = await run_verify(source, target)
+
+    assert not verified
+    assert "record counts differ" in reason
+    assert target.closed
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_key_count_mismatch():
+    source = FakeStore(["unused"], ["cat_a"], keys=2)
+    target = FakeStore(["alice-id"], ["cat_a"], keys=1)
+
+    verified, reason = await run_verify(source, target)
+
+    assert not verified
+    assert "key counts" in reason
+    assert target.closed

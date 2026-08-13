@@ -151,14 +151,11 @@ class MultiWalletConverter:
         return True, ""
 
     async def convert_tenant_wallet(self, wallet_record):
-        """Create the tenant database and copy the tenant's wallet into it."""
+        """Copy the tenant's wallet into its already-created database."""
         settings = wallet_record["settings"]
         wallet_id = settings["wallet.id"]
         wallet_name = settings["wallet.name"]
         key_method = self.tenant_key_method(settings)
-
-        # Create the new db for the individual wallet
-        await self.conn.create_database(self.admin_wallet_name, wallet_name)
 
         # Get the tenant profile store and set it as the default profile
         sub_wallet_tenant_store = await Store.open(
@@ -267,6 +264,14 @@ class MultiWalletConverter:
                         outcome = "converted"
 
                     if outcome != "skipped":
+                        # Create the tenant database, and claim it for error
+                        # cleanup only once the create has succeeded — a create
+                        # collision (e.g. a database that appeared after the
+                        # existence check) then fails this tenant without ever
+                        # deleting a database this run did not create.
+                        await self.conn.create_database(
+                            self.admin_wallet_name, wallet_name
+                        )
                         target_fresh = True
                         self.log(f"{prefix}: copying wallet...")
                         await self.convert_tenant_wallet(wallet_record)
@@ -323,7 +328,17 @@ class MultiWalletConverter:
                     await self.conn.remove_database(
                         self.admin_wallet_name, self.sub_wallet_name
                     )
-                    sub_wallet_dropped = True
+                    # Confirm the deletion: some connection implementations
+                    # swallow removal errors rather than raising.
+                    sub_wallet_dropped = not await self.conn.database_exists(
+                        self.admin_wallet_name, self.sub_wallet_name
+                    )
+                    if not sub_wallet_dropped:
+                        drop_error = "sub wallet database still exists after delete"
+                        self.log(
+                            f"Failed to delete sub wallet {self.sub_wallet_name}: "
+                            f"{drop_error}"
+                        )
                 except Exception as e:
                     drop_error = e
                     self.log(f"Failed to delete sub wallet {self.sub_wallet_name}: {e}")
